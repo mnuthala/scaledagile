@@ -1,0 +1,108 @@
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ADD THIS FUNCTION BEFORE THE ICONS
+    const fetchWorkItemsLocal = async (orgUrl, project, pat) => {
+        const auth = btoa(`:${pat}`);
+        const headers = {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json'
+        };
+
+        const wiqlUrl = `${orgUrl}/${project}/_apis/wit/wiql?api-version=7.0`;
+        const wiqlQuery = {
+            query: `SELECT [System.Id], [System.Title], [System.IterationPath], [System.AreaPath]
+                    FROM WorkItems 
+                    WHERE [System.WorkItemType] = 'Epic' 
+                    AND [System.State] <> 'Closed'
+                    ORDER BY [System.AreaPath]`
+        };
+
+        try {
+            const queryResponse = await fetch(wiqlUrl, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(wiqlQuery)
+            });
+
+            const queryResult = await queryResponse.json();
+            
+            if (!queryResult.workItems || queryResult.workItems.length === 0) {
+                console.log('No epics found');
+                return [];
+            }
+
+            const workItemIds = queryResult.workItems.map(wi => wi.id);
+            
+            const epicsUrl = `${orgUrl}/${project}/_apis/wit/workitems?ids=${workItemIds.join(',')}&fields=System.Id,System.Title,System.IterationPath,System.AreaPath,Microsoft.VSTS.Scheduling.StartDate,Microsoft.VSTS.Scheduling.FinishDate&api-version=7.0`;
+            const epicsResponse = await fetch(epicsUrl, { headers });
+            const epicsData = await epicsResponse.json();
+
+            const valueStreamMap = new Map();
+
+            for (const wi of epicsData.value) {
+                const areaPath = wi.fields['System.AreaPath'];
+                const epic = {
+                    id: wi.id.toString(),
+                    title: wi.fields['System.Title'],
+                    iterationStart: wi.fields['Microsoft.VSTS.Scheduling.StartDate'] || new Date().toISOString(),
+                    iterationEnd: wi.fields['Microsoft.VSTS.Scheduling.FinishDate'] || new Date().toISOString(),
+                    features: []
+                };
+
+                // Query for Features under this Epic
+                const featureWiqlUrl = `${orgUrl}/${project}/_apis/wit/wiql?api-version=7.0`;
+                const featureQuery = {
+                    query: `SELECT [System.Id], [System.Title] 
+                            FROM WorkItemLinks 
+                            WHERE [Source].[System.Id] = ${wi.id}
+                            AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
+                            AND [Target].[System.WorkItemType] = 'Feature'
+                            MODE (Recursive)`
+                };
+
+                const featureQueryResponse = await fetch(featureWiqlUrl, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(featureQuery)
+                });
+
+                const featureResult = await featureQueryResponse.json();
+                
+                if (featureResult.workItemRelations && featureResult.workItemRelations.length > 0) {
+                    const featureIds = featureResult.workItemRelations
+                        .filter(rel => rel.target)
+                        .map(rel => rel.target.id);
+                    
+                    if (featureIds.length > 0) {
+                        const featuresUrl = `${orgUrl}/${project}/_apis/wit/workitems?ids=${featureIds.join(',')}&fields=System.Id,System.Title,Microsoft.VSTS.Scheduling.StartDate,Microsoft.VSTS.Scheduling.FinishDate&api-version=7.0`;
+                        const featuresResponse = await fetch(featuresUrl, { headers });
+                        const featuresData = await featuresResponse.json();
+
+                        epic.features = featuresData.value.map(f => ({
+                            id: f.id.toString(),
+                            title: f.fields['System.Title'],
+                            iterationStart: f.fields['Microsoft.VSTS.Scheduling.StartDate'] || epic.iterationStart,
+                            iterationEnd: f.fields['Microsoft.VSTS.Scheduling.FinishDate'] || epic.iterationEnd
+                        }));
+                    }
+                }
+
+                if (!valueStreamMap.has(areaPath)) {
+                    valueStreamMap.set(areaPath, []);
+                }
+                valueStreamMap.get(areaPath).push(epic);
+            }
+
+            return Array.from(valueStreamMap.entries()).map(([name, epics]) => ({
+                id: name.replace(/[^a-zA-Z0-9]/g, '-'),
+                name: name.split('\\').pop() || name,
+                epics
+            }));
+        } catch (error) {
+            console.error('Error fetching work items:', error);
+            return [];
+        }
+    };
+
+    // Rest of your code (icons, etc.)...

@@ -1,0 +1,54 @@
+{
+  "manifestVersion": 1,
+  "id": "timeline-view-extension",
+  "version": "1.0.0",
+  "name": "Value Stream Timeline",
+  "description": "Visual timeline view for epics and features across value streams",
+  "publisher": "Mark Nuthalapati",
+  "categories": ["Azure Boards"],
+  "targets": [
+    {
+      "id": "Microsoft.VisualStudio.Services"
+    }
+  ],
+  "icons": {
+    "default": "images/logo.png"
+  },
+  "contributions": [
+    {
+      "id": "timeline-hub",
+      "type": "ms.vss-web.hub",
+      "targets": ["ms.vss-work-web.work-hub-group"],
+      "properties": {
+        "name": "Timeline",
+        "order": 99,
+        "uri": "dist/index.html"
+      }
+    },
+    {
+      "id": "timeline-settings",
+      "type": "ms.vss-web.hub",
+      "targets": ["ms.vss-web.project-admin-hub-group"],
+      "properties": {
+        "name": "Timeline Settings",
+        "order": 100,
+        "uri": "dist/settings.html"
+      }
+    }
+  ],
+  "scopes": [
+    "vso.work",
+    "vso.work_write",
+    "vso.settings"
+  ],
+  "files": [
+    {
+      "path": "dist",
+      "addressable": true
+    },
+    {
+      "path": "images",
+      "addressable": true
+    }
+  ]
+}
