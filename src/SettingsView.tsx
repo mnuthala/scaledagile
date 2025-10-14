@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Settings } from 'lucide-react';
-import { saveQueryGuid } from './azure-devops-service';
+import { saveQueryGuid } from './services/azure-devops-service';
 
 const SettingsView: React.FC = () => {
   const [queryGuid, setQueryGuid] = useState('');

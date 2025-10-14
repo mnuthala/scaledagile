@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
-import TimelineView from './TimelineView';
+import { TimelineView } from './components/timeline/TimelineView';
 
 const isAzureDevOpsContext = typeof window !== 'undefined' && (window as any).SDK;
 

@@ -2,53 +2,92 @@
   "manifestVersion": 1,
   "id": "timeline-view-extension",
   "version": "1.0.0",
-  "name": "Value Stream Timeline",
-  "description": "Visual timeline view for epics and features across value streams",
+  "name": "Voyager Timeline",
+  "description": "Visual timeline view for epics and features across value streams with quarters and months",
   "publisher": "Mark Nuthalapati",
+  "public": false,
   "categories": ["Azure Boards"],
+  "tags": [
+    "timeline",
+    "value stream",
+    "epic",
+    "feature",
+    "planning",
+    "roadmap",
+    "visualization"
+  ],
   "targets": [
     {
       "id": "Microsoft.VisualStudio.Services"
     }
   ],
+  "demands": [
+    "api-version/3.0"
+  ],
   "icons": {
     "default": "images/logo.png"
+  },
+  "screenshots": [
+    {
+      "path": "images/screenshot1.png"
+    }
+  ],
+  "content": {
+    "details": {
+      "path": "README.md"
+    }
   },
   "contributions": [
     {
       "id": "timeline-hub",
       "type": "ms.vss-web.hub",
-      "targets": ["ms.vss-work-web.work-hub-group"],
+      "targets": [
+        "ms.vss-work-web.work-hub-group"
+      ],
       "properties": {
         "name": "Timeline",
         "order": 99,
-        "uri": "dist/index.html"
+        "uri": "dist/index.html",
+        "icon": "asset://images/logo.png",
+        "supportsMobile": true
       }
     },
     {
       "id": "timeline-settings",
       "type": "ms.vss-web.hub",
-      "targets": ["ms.vss-web.project-admin-hub-group"],
+      "targets": [
+        "ms.vss-web.project-admin-hub-group"
+      ],
       "properties": {
         "name": "Timeline Settings",
         "order": 100,
-        "uri": "dist/settings.html"
+        "uri": "dist/settings.html",
+        "icon": "asset://images/settings-icon.png"
       }
     }
   ],
+  "contributionTypes": [],
   "scopes": [
     "vso.work",
     "vso.work_write",
+    "vso.project",
     "vso.settings"
   ],
   "files": [
     {
       "path": "dist",
-      "addressable": true
+      "addressable": true,
+      "packagePath": "dist"
     },
     {
       "path": "images",
-      "addressable": true
+      "addressable": true,
+      "packagePath": "images"
+    },
+    {
+      "path": "README.md",
+      "addressable": true,
+      "packagePath": "/"
     }
   ]
 }
