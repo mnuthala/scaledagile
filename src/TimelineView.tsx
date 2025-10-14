@@ -422,41 +422,41 @@ const TimelineView: React.FC = () => {
                             return (
                               <div key={epic.id}>
                                 <div
-                                  className="absolute bg-white rounded-lg shadow-md border-l-4 border-orange-500 cursor-pointer hover:shadow-lg transition-shadow z-10 overflow-hidden"
-                                  style={{
+                                className="absolute bg-white rounded-lg shadow-md border-l-4 border-orange-500 cursor-pointer hover:shadow-lg transition-shadow z-10 overflow-hidden"
+                                style={{
                                     ...barStyle,
                                     top: `${yOffset}px`,
                                     height: '64px'
-                                  }}
-                                  onClick={() => toggleEpic(epic.id)}
-                                  title={`${epic.title}\nStart: ${new Date(epic.iterationStart).toLocaleDateString()}\nEnd: ${new Date(epic.iterationEnd).toLocaleDateString()}`}
+                                }}
+                                onClick={() => toggleEpic(epic.id)}
+                                title={`${epic.title}\nStart: ${new Date(epic.iterationStart).toLocaleDateString()}\nEnd: ${new Date(epic.iterationEnd).toLocaleDateString()}`}
                                 >
-                                  <div className="px-2 py-2 h-full flex flex-col">
+                                <div className="px-2 py-2 h-full flex flex-col">
                                     <div className="flex items-start gap-1 mb-2">
-                                      {expandedEpics[epic.id] ? (
+                                    {expandedEpics[epic.id] ? (
                                         <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0 text-gray-600 mt-0.5" />
-                                      ) : (
+                                    ) : (
                                         <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0 text-gray-600 mt-0.5" />
-                                      )}
-                                      <span className="text-xs sm:text-sm font-semibold text-gray-800 truncate flex-1 leading-tight">
+                                    )}
+                                    <span className="text-xs sm:text-sm font-semibold text-gray-800 truncate flex-1 leading-tight">
                                         {epic.title}
-                                      </span>
+                                    </span>
                                     </div>
                                     
                                     <div className="mt-auto">
-                                      <div className="flex justify-between items-center mb-1">
+                                    <div className="flex justify-between items-center mb-1">
                                         <span className="text-xs text-gray-600">
-                                          {epicProgress.completed}/{epicProgress.total} stories
+                                        {epicProgress.completed}/{epicProgress.total} stories
                                         </span>
-                                      </div>
-                                      <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
-                                        <div 
-                                          className="bg-orange-500 h-1.5 rounded-full transition-all"
-                                          style={{ width: `${progressPercentage}%` }}
-                                        ></div>
-                                      </div>
                                     </div>
-                                  </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-1 mb-1">
+                                        <div 
+                                        className="bg-orange-500 h-1 rounded-full transition-all"
+                                        style={{ width: `${progressPercentage}%` }}
+                                        ></div>
+                                    </div>
+                                    </div>
+                                </div>
                                 </div>
 
                                 {expandedEpics[epic.id] && epic.features.map((feature: any, featureIdx: number) => {
@@ -472,34 +472,36 @@ const TimelineView: React.FC = () => {
 
                                   return (
                                     <div
-                                      key={feature.id}
-                                      className="absolute bg-white rounded-lg shadow-md border-l-4 border-purple-500 z-10 overflow-hidden"
-                                      style={{
+                                    key={feature.id}
+                                    className="absolute bg-white rounded-lg shadow-md border-l-4 border-purple-500 z-10 overflow-hidden"
+                                    style={{
                                         ...featureBarStyle,
                                         top: `${yOffset + 75 + featureIdx * 60}px`,
                                         height: '52px'
-                                      }}
-                                      title={`${feature.title}\nStart: ${new Date(feature.iterationStart).toLocaleDateString()}\nEnd: ${new Date(feature.iterationEnd).toLocaleDateString()}`}
+                                    }}
+                                    title={`${feature.title}\nStart: ${new Date(feature.iterationStart).toLocaleDateString()}\nEnd: ${new Date(feature.iterationEnd).toLocaleDateString()}`}
                                     >
-                                      <div className="px-2 py-2 h-full flex flex-col">
-                                        <span className="text-xs font-medium text-gray-800 truncate mb-2 leading-tight">
-                                          {feature.title}
+                                    <div className="px-2 py-2 h-full flex flex-col">
+                                        <div className="flex items-start mb-2">
+                                        <span className="text-xs font-medium text-gray-800 truncate flex-1 leading-tight">
+                                            {feature.title}
                                         </span>
+                                        </div>
                                         
                                         <div className="mt-auto">
-                                          <div className="flex justify-between items-center mb-1">
+                                        <div className="flex justify-between items-center mb-1">
                                             <span className="text-xs text-gray-600">
-                                              {featureProgress.completed}/{featureProgress.total} stories
+                                            {featureProgress.completed}/{featureProgress.total} stories
                                             </span>
-                                          </div>
-                                          <div className="w-full bg-gray-200 rounded-full h-1 mb-1">
-                                            <div 
-                                              className="bg-purple-500 h-1 rounded-full transition-all"
-                                              style={{ width: `${featureProgressPercentage}%` }}
-                                            ></div>
-                                          </div>
                                         </div>
-                                      </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-1 mb-1">
+                                            <div 
+                                            className="bg-purple-500 h-1 rounded-full transition-all"
+                                            style={{ width: `${featureProgressPercentage}%` }}
+                                            ></div>
+                                        </div>
+                                        </div>
+                                    </div>
                                     </div>
                                   );
                                 })}
