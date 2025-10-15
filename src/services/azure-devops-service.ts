@@ -1,186 +1,118 @@
-// azure-devops-service.ts - With completion tracking
+// azure-devops-service.ts - Refactored with reusable functions
 
-export type { Epic, Feature, ValueStream } from '../types/timeline.types';
+export type { Epic, Feature, ValueStream } from '@types/timeline.types';
 
 import * as SDK from 'azure-devops-extension-sdk';
 import { WorkItemTrackingRestClient, TreeStructureGroup } from 'azure-devops-extension-api/WorkItemTracking';
 import { getClient } from 'azure-devops-extension-api';
 
-type WorkItemType = 'Epic' | 'Feature';
-type ChildWorkItemType = 'Feature' | 'User Story';
+// ============================================================================
+// CONSTANTS
+// ============================================================================
 
-interface ChildWorkItemCounts {
-  total: number;
-  completed: number;
-  childIds: number[];
+const COMPLETED_STATES = new Set([
+  'Done', 
+  'Closed', 
+  'Resolved', 
+  'Completed'
+]);
+
+const WORK_ITEM_FIELDS = [
+  'System.Id',
+  'System.Title',
+  'System.State',
+  'System.IterationPath',
+  'System.AreaPath',
+  'System.WorkItemType',
+  'System.TeamProject'
+];
+
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+interface WorkItemHierarchy {
+  id: string;
+  title: string;
+  state: string;
+  iterationStart: string;
+  iterationEnd: string;
+  children?: WorkItemHierarchy[];
+  [key: string]: any;
 }
 
-/**
- * Fetch child work items with completion status using a SINGLE query
- * @param workItemId - ID of the parent work item (Epic or Feature)
- * @param workItemType - Type of the parent work item ('Epic' or 'Feature')
- * @param orgUrl - Organization URL
- * @param project - Project name
- * @param headers - Auth headers
- * @returns Object with total, completed counts and child IDs
- */
-async function fetchChildWorkItemsWithCompletion(
-  workItemId: number,
-  workItemType: WorkItemType,
-  orgUrl: string,
-  project: string,
-  headers: any
-): Promise<ChildWorkItemCounts> {
-  
-  // Determine child work item type
-  const childType: ChildWorkItemType = workItemType === 'Epic' ? 'Feature' : 'User Story';
-  
-  // Completed states vary by work item type
-  const completedStates = childType === 'Feature' 
-    ? ['Done', 'Closed'] 
-    : ['Done', 'Closed', 'Resolved'];
-  
-  console.log(`      --- Fetching ${childType}s for ${workItemType} ${workItemId} with completion status ---`);
-  
-  // SINGLE QUERY: Get all child work items WITH their states
-  const query = {
-    query: `SELECT [System.Id], [System.State]
-            FROM WorkItemLinks
-            WHERE [Source].[System.Id] = ${workItemId}
-            AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
-            AND [Target].[System.WorkItemType] = '${childType}'
-            AND [Target].[System.TeamProject] = '${project}'
-            MODE (MustContain)`
-  };
-  
-  const wiqlUrl = `${orgUrl}/${project}/_apis/wit/wiql?api-version=7.0`;
-  
-  try {
-    const response = await fetch(wiqlUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(query)
-    });
-    
-    const result = await response.json();
-    const relations = result.workItemRelations || [];
-    
-    // Extract child IDs and states from the single query result
-    const children: Array<{ id: number; state: string }> = [];
-    
-    for (const rel of relations) {
-      // Skip the source work item (the parent)
-      if (rel.target && rel.target.id !== workItemId) {
-        children.push({
-          id: rel.target.id,
-          state: rel.attributes?.['System.State'] || 'Unknown'
-        });
+interface IterationDates {
+  startDate: string;
+  finishDate: string;
+}
+
+// ============================================================================
+// COMPLETION CALCULATION
+// ============================================================================
+
+function isCompletedState(state: string): boolean {
+  return COMPLETED_STATES.has(state);
+}
+
+function calculateCompletionFromChildren(workItem: any): { total: number; completed: number } {
+  // If this item has children (features or user stories), calculate from them
+  if (workItem.features && workItem.features.length > 0) {
+    let completed = 0;
+    for (const feature of workItem.features) {
+      if (feature.state && isCompletedState(feature.state)) {
+        completed++;
       }
     }
-    
-    if (children.length === 0) {
-      console.log(`      No ${childType}s found`);
-      return { total: 0, completed: 0, childIds: [] };
+    return { total: workItem.features.length, completed };
+  }
+  
+  if (workItem.userStories && workItem.userStories.length > 0) {
+    let completed = 0;
+    for (const story of workItem.userStories) {
+      if (story.state && isCompletedState(story.state)) {
+        completed++;
+      }
     }
-    
-    // Count completed items based on state
-    const completedCount = children.filter(child => 
-      completedStates.includes(child.state)
-    ).length;
-    
-    const childIds = children.map(c => c.id);
-    
-    console.log(`      ${childType}s: ${completedCount} completed out of ${children.length} total`);
-    console.log(`      States: ${children.map(c => `${c.id}:${c.state}`).join(', ')}`);
-    
-    return {
-      total: children.length,
-      completed: completedCount,
-      childIds: childIds
-    };
-    
-  } catch (error) {
-    console.error(`      Error fetching ${childType}s with completion:`, error);
-    return { total: 0, completed: 0, childIds: [] };
+    return { total: workItem.userStories.length, completed };
+  }
+  
+  // Leaf node - check if it's completed
+  const isCompleted = workItem.state && isCompletedState(workItem.state);
+  return { total: 1, completed: isCompleted ? 1 : 0 };
+}
+
+function updateCompletionCounts(valueStreams: any[]): void {
+  for (const vs of valueStreams) {
+    if (vs.epics && vs.epics.length > 0) {
+      for (const epic of vs.epics) {
+        // Update feature completion counts
+        const epicCounts = calculateCompletionFromChildren(epic);
+        epic.featureCount = epicCounts.total;
+        epic.completedFeatureCount = epicCounts.completed;
+        
+        // Update user story completion counts for each feature
+        if (epic.features && epic.features.length > 0) {
+          for (const feature of epic.features) {
+            const featureCounts = calculateCompletionFromChildren(feature);
+            feature.userStoryCount = featureCounts.total;
+            feature.completedUserStoryCount = featureCounts.completed;
+          }
+        }
+      }
+    }
   }
 }
 
-/**
- * SDK version - Fetch child work items with completion status using a SINGLE query
- */
-async function fetchChildWorkItemsWithCompletionSDK(
-  workItemId: number,
-  workItemType: WorkItemType,
-  client: WorkItemTrackingRestClient,
-  projectId: string,
-  projectName: string
-): Promise<ChildWorkItemCounts> {
-  
-  const childType: ChildWorkItemType = workItemType === 'Epic' ? 'Feature' : 'User Story';
-  
-  const completedStates = childType === 'Feature' 
-    ? ['Done', 'Closed'] 
-    : ['Done', 'Closed', 'Resolved'];
-  
-  console.log(`      --- Fetching ${childType}s for ${workItemType} ${workItemId} with completion status (SDK) ---`);
-  
-  try {
-    // SINGLE QUERY: Get all child work items WITH their states
-    const query = {
-      query: `SELECT [System.Id], [System.State]
-              FROM WorkItemLinks
-              WHERE [Source].[System.Id] = ${workItemId}
-              AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
-              AND [Target].[System.WorkItemType] = '${childType}'
-              AND [Target].[System.TeamProject] = '${projectName}'
-              MODE (MustContain)`
-    };
-    
-    const result = await client.queryByWiql(query, projectId);
-    const relations = result.workItemRelations || [];
-    
-    // Extract child IDs and states from the single query result
-    const children: Array<{ id: number; state: string }> = [];
-    
-    for (const rel of relations) {
-      if (rel.target && rel.target.id !== workItemId) {
-        children.push({
-          id: rel.target.id!,
-          state: (rel as any).attributes?.['System.State'] || 'Unknown'
-        });
-      }
-    }
-    
-    if (children.length === 0) {
-      console.log(`      No ${childType}s found`);
-      return { total: 0, completed: 0, childIds: [] };
-    }
-    
-    // Count completed items based on state
-    const completedCount = children.filter(child => 
-      completedStates.includes(child.state)
-    ).length;
-    
-    const childIds = children.map(c => c.id);
-    
-    console.log(`      ${childType}s: ${completedCount} completed out of ${children.length} total`);
-    console.log(`      States: ${children.map(c => `${c.id}:${c.state}`).join(', ')}`);
-    
-    return {
-      total: children.length,
-      completed: completedCount,
-      childIds: childIds
-    };
-    
-  } catch (error) {
-    console.error(`      Error fetching ${childType}s with completion:`, error);
-    return { total: 0, completed: 0, childIds: [] };
-  }
-}
+// ============================================================================
+// ITERATION HELPERS
+// ============================================================================
 
-// Helper function to recursively extract iterations from classification nodes
-function extractIterationsFromNode(node: any, projectName: string, parentPath: string = ''): Map<string, { startDate: string; finishDate: string }> {
-  const iterationMap = new Map<string, { startDate: string; finishDate: string }>();
+function extractIterationsFromNode(
+  node: any, 
+  projectName: string, 
+  parentPath: string = ''
+): Map<string, IterationDates> {
+  const iterationMap = new Map<string, IterationDates>();
   
   if (!node) return iterationMap;
   
@@ -192,23 +124,19 @@ function extractIterationsFromNode(node: any, projectName: string, parentPath: s
   }
   
   if (node.attributes && node.attributes.startDate && node.attributes.finishDate) {
-    iterationMap.set(currentPath, {
+    const dates: IterationDates = {
       startDate: node.attributes.startDate,
       finishDate: node.attributes.finishDate
-    });
+    };
+    
+    iterationMap.set(currentPath, dates);
     
     const pathWithoutProject = currentPath.replace(`${projectName}\\`, '');
     if (pathWithoutProject !== currentPath) {
-      iterationMap.set(pathWithoutProject, {
-        startDate: node.attributes.startDate,
-        finishDate: node.attributes.finishDate
-      });
+      iterationMap.set(pathWithoutProject, dates);
     }
     
-    iterationMap.set(node.name, {
-      startDate: node.attributes.startDate,
-      finishDate: node.attributes.finishDate
-    });
+    iterationMap.set(node.name, dates);
   }
   
   if (node.children && Array.isArray(node.children)) {
@@ -241,9 +169,8 @@ function normalizeIterationPath(iterationPath: string, projectName: string): str
 function findIterationDates(
   iterationPath: string, 
   projectName: string, 
-  iterationMap: Map<string, { startDate: string; finishDate: string }>
-): { startDate: string; finishDate: string } | undefined {
-  
+  iterationMap: Map<string, IterationDates>
+): IterationDates | undefined {
   const variations = normalizeIterationPath(iterationPath, projectName);
   
   for (const variation of variations) {
@@ -256,6 +183,244 @@ function findIterationDates(
   return undefined;
 }
 
+// ============================================================================
+// WIQL QUERY BUILDERS
+// ============================================================================
+
+function buildChildWorkItemQuery(
+  parentId: number,
+  childWorkItemType: string,
+  projectName: string
+): any {
+  return {
+    query: `SELECT [System.Id]
+            FROM WorkItemLinks
+            WHERE [Source].[System.Id] = ${parentId}
+            AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
+            AND [Target].[System.WorkItemType] = '${childWorkItemType}'
+            AND [Target].[System.TeamProject] = '${projectName}'
+            MODE (MustContain)`
+  };
+}
+
+function buildEpicFeatureQuery(projectName: string): any {
+  return {
+    /** query: `SELECT [System.Id]
+            FROM WorkItemLinks
+            WHERE [Source].[System.TeamProject] = '${projectName}'
+            AND [Source].[System.WorkItemType] = 'Epic'
+            AND [Source].[System.State] <> 'Closed'
+            AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
+            AND [Target].[System.WorkItemType] = 'Feature'
+            AND [Target].[System.TeamProject] = '${projectName}'
+            MODE (MustContain)` */
+    query: `SELECT [System.Id]
+            FROM WorkItemLinks
+            WHERE 
+              (
+                [Source].[System.WorkItemType] = 'Epic'
+                AND [Source].[System.State] <> 'Closed'
+                AND [Source].[System.TeamProject] = '${projectName}'
+              )
+              AND (
+                [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
+              )
+              AND (
+                [Target].[System.WorkItemType] <> ''
+                AND [Target].[System.TeamProject] = '${projectName}'
+              )
+            MODE (Recursive, ReturnMatchingChildren)`
+  };
+}
+
+// ============================================================================
+// REST API FUNCTIONS (Local/PAT Mode)
+// ============================================================================
+
+async function fetchWorkItemsByIds(
+  orgUrl: string,
+  project: string,
+  ids: number[],
+  headers: any
+): Promise<any[]> {
+  if (ids.length === 0) return [];
+  
+  const url = `${orgUrl}/${project}/_apis/wit/workitems?ids=${ids.join(',')}&fields=${WORK_ITEM_FIELDS.join(',')}&api-version=7.0`;
+  const response = await fetch(url, { headers });
+  const data = await response.json();
+  
+  return data.value || [];
+}
+
+async function queryChildWorkItemIds(
+  orgUrl: string,
+  project: string,
+  parentId: number,
+  childWorkItemType: string,
+  headers: any
+): Promise<number[]> {
+  const wiqlUrl = `${orgUrl}/${project}/_apis/wit/wiql?api-version=7.0`;
+  const query = buildChildWorkItemQuery(parentId, childWorkItemType, project);
+  
+  const response = await fetch(wiqlUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(query)
+  });
+  
+  const result = await response.json();
+  const relations = result.workItemRelations || [];
+  
+  const childIds: number[] = [];
+  for (const rel of relations) {
+    if (rel.target && rel.target.id !== parentId) {
+      childIds.push(rel.target.id);
+    }
+  }
+  
+  return childIds;
+}
+
+async function fetchChildWorkItems(
+  orgUrl: string,
+  project: string,
+  parentId: number,
+  childWorkItemType: string,
+  headers: any,
+  iterationMap: Map<string, IterationDates>
+): Promise<any[]> {
+  const childIds = await queryChildWorkItemIds(orgUrl, project, parentId, childWorkItemType, headers);
+  if (childIds.length === 0) return [];
+  
+  const workItems = await fetchWorkItemsByIds(orgUrl, project, childIds, headers);
+  const projectWorkItems = workItems.filter(wi => wi.fields['System.TeamProject'] === project);
+  
+  const result: any[] = [];
+  
+  for (const wi of projectWorkItems) {
+    const iterationPath = wi.fields['System.IterationPath'];
+    if (!iterationPath) continue;
+    
+    const iterationDates = findIterationDates(iterationPath, project, iterationMap);
+    if (!iterationDates) continue;
+    
+    result.push({
+      id: wi.id.toString(),
+      title: wi.fields['System.Title'],
+      state: wi.fields['System.State'],
+      iterationStart: iterationDates.startDate,
+      iterationEnd: iterationDates.finishDate
+    });
+  }
+  
+  return result;
+}
+
+async function fetchClassificationNodes(
+  orgUrl: string,
+  project: string,
+  headers: any
+): Promise<Map<string, IterationDates>> {
+  const url = `${orgUrl}/${project}/_apis/wit/classificationnodes/iterations?$depth=10&api-version=7.0`;
+  const response = await fetch(url, { headers });
+  const data = await response.json();
+  
+  return extractIterationsFromNode(data, project);
+}
+
+// ============================================================================
+// SDK FUNCTIONS (Extension Mode)
+// ============================================================================
+
+async function fetchWorkItemsByIdsSDK(
+  client: WorkItemTrackingRestClient,
+  projectId: string,
+  ids: number[]
+): Promise<any[]> {
+  if (ids.length === 0) return [];
+  
+  return await client.getWorkItems(ids, projectId, WORK_ITEM_FIELDS);
+}
+
+async function queryChildWorkItemIdsSDK(
+  client: WorkItemTrackingRestClient,
+  projectId: string,
+  parentId: number,
+  childWorkItemType: string,
+  projectName: string
+): Promise<number[]> {
+  const query = buildChildWorkItemQuery(parentId, childWorkItemType, projectName);
+  const result = await client.queryByWiql(query, projectId);
+  const relations = result.workItemRelations || [];
+  
+  const childIds: number[] = [];
+  for (const rel of relations) {
+    if (rel.target && rel.target.id && rel.target.id !== parentId) {
+      childIds.push(rel.target.id);
+    }
+  }
+  
+  return childIds;
+}
+
+async function fetchChildWorkItemsSDK(
+  client: WorkItemTrackingRestClient,
+  projectId: string,
+  projectName: string,
+  parentId: number,
+  childWorkItemType: string,
+  iterationMap: Map<string, IterationDates>
+): Promise<any[]> {
+  const childIds = await queryChildWorkItemIdsSDK(client, projectId, parentId, childWorkItemType, projectName);
+  if (childIds.length === 0) return [];
+  
+  const workItems = await fetchWorkItemsByIdsSDK(client, projectId, childIds);
+  
+  const result: any[] = [];
+  
+  for (const wi of workItems) {
+    const iterationPath = wi.fields['System.IterationPath'];
+    if (!iterationPath) continue;
+    
+    const iterationDates = findIterationDates(iterationPath, projectName, iterationMap);
+    if (!iterationDates) continue;
+    
+    result.push({
+      id: wi.id!.toString(),
+      title: wi.fields['System.Title'],
+      state: wi.fields['System.State'],
+      iterationStart: iterationDates.startDate,
+      iterationEnd: iterationDates.finishDate
+    });
+  }
+  
+  return result;
+}
+
+async function fetchClassificationNodesSDK(
+  client: WorkItemTrackingRestClient,
+  projectId: string,
+  projectName: string
+): Promise<Map<string, IterationDates>> {
+  try {
+    const classificationNode = await client.getClassificationNode(
+      projectId, 
+      TreeStructureGroup.Iterations, 
+      undefined, 
+      10
+    );
+    
+    return extractIterationsFromNode(classificationNode, projectName);
+  } catch (error) {
+    console.error('Error fetching classification nodes:', error);
+    return new Map();
+  }
+}
+
+// ============================================================================
+// MAIN FETCH FUNCTIONS
+// ============================================================================
+
 export async function fetchWorkItemsLocal(
   orgUrl: string,
   project: string,
@@ -267,25 +432,19 @@ export async function fetchWorkItemsLocal(
     'Content-Type': 'application/json'
   };
 
-  console.log('=== Starting Work Items Fetch ===');
+  console.log('=== Starting Work Items Fetch (Local) ===');
 
+  // Fetch iteration dates
+  const iterationMap = await fetchClassificationNodes(orgUrl, project, headers);
+
+  // Query for Epic-Feature relationships
   const wiqlUrl = `${orgUrl}/${project}/_apis/wit/wiql?api-version=7.0`;
-  const wiqlQuery = {
-    query: `SELECT [System.Id]
-            FROM WorkItemLinks
-            WHERE [Source].[System.TeamProject] = '${project}'
-            AND [Source].[System.WorkItemType] = 'Epic'
-            AND [Source].[System.State] <> 'Closed'
-            AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
-            AND [Target].[System.WorkItemType] = 'Feature'
-            AND [Target].[System.TeamProject] = '${project}'
-            MODE (MustContain)`
-  };
-
+  const epicFeatureQuery = buildEpicFeatureQuery(project);
+  
   const queryResponse = await fetch(wiqlUrl, {
     method: 'POST',
     headers,
-    body: JSON.stringify(wiqlQuery)
+    body: JSON.stringify(epicFeatureQuery)
   });
 
   const queryResult = await queryResponse.json();
@@ -295,6 +454,7 @@ export async function fetchWorkItemsLocal(
     return [];
   }
 
+  // Extract Epic IDs and Epic-Feature mappings
   const epicIdsSet = new Set<number>();
   const epicFeatureMap = new Map<number, number[]>();
   
@@ -313,84 +473,72 @@ export async function fetchWorkItemsLocal(
     }
   }
   
-  const workItemIds = Array.from(epicIdsSet);
-  
-  const epicsUrl = `${orgUrl}/${project}/_apis/wit/workitems?ids=${workItemIds.join(',')}&fields=System.Id,System.Title,System.IterationPath,System.AreaPath,System.TeamProject&api-version=7.0`;
-  const epicsResponse = await fetch(epicsUrl, { headers });
-  const epicsData = await epicsResponse.json();
-  
-  const projectEpics = epicsData.value.filter((wi: any) => wi.fields['System.TeamProject'] === project);
-
-  const classificationNodesUrl = `${orgUrl}/${project}/_apis/wit/classificationnodes/iterations?$depth=10&api-version=7.0`;
-  const classificationResponse = await fetch(classificationNodesUrl, { headers });
-  const classificationData = await classificationResponse.json();
-  
-  const iterationMap = extractIterationsFromNode(classificationData, project);
+  // Fetch Epic details
+  const epicIds = Array.from(epicIdsSet);
+  const epics = await fetchWorkItemsByIds(orgUrl, project, epicIds, headers);
+  const projectEpics = epics.filter(wi => wi.fields['System.TeamProject'] === project);
 
   const valueStreamMap = new Map<string, any[]>();
 
+  // Build Epic hierarchy
   for (const wi of projectEpics) {
     const iterationPath = wi.fields['System.IterationPath'];
     const areaPath = wi.fields['System.AreaPath'];
+    const state = wi.fields['System.State'];
     
     if (!iterationPath) continue;
     
     const iterationDates = findIterationDates(iterationPath, project, iterationMap);
     if (!iterationDates) continue;
     
-    // Fetch Epic's child Features with completion status
-    const epicCompletion = await fetchChildWorkItemsWithCompletion(
-      wi.id,
-      'Epic',
-      orgUrl,
-      project,
-      headers
-    );
-    
     const epic: any = {
       id: wi.id.toString(),
       title: wi.fields['System.Title'],
+      state: state,
       iterationStart: iterationDates.startDate,
       iterationEnd: iterationDates.finishDate,
       features: [],
-      featureCount: epicCompletion.total,
-      completedFeatureCount: epicCompletion.completed
+      featureCount: 0,
+      completedFeatureCount: 0
     };
 
-    const featureIds = epicCompletion.childIds;
-    
+    // Fetch Features for this Epic
+    const featureIds = epicFeatureMap.get(wi.id) || [];
     if (featureIds.length > 0) {
-      const featuresUrl = `${orgUrl}/${project}/_apis/wit/workitems?ids=${featureIds.join(',')}&fields=System.Id,System.Title,System.IterationPath,System.TeamProject&api-version=7.0`;
-      const featuresResponse = await fetch(featuresUrl, { headers });
-      const featuresData = await featuresResponse.json();
-      
-      const projectFeatures = featuresData.value.filter((f: any) => f.fields['System.TeamProject'] === project);
+      const features = await fetchWorkItemsByIds(orgUrl, project, featureIds, headers);
+      const projectFeatures = features.filter(f => f.fields['System.TeamProject'] === project);
 
       for (const f of projectFeatures) {
         const featureIterationPath = f.fields['System.IterationPath'];
+        const featureState = f.fields['System.State'];
         
         if (!featureIterationPath) continue;
         
         const featureIterationDates = findIterationDates(featureIterationPath, project, iterationMap);
         if (!featureIterationDates) continue;
         
-        // Fetch Feature's child User Stories with completion status
-        const featureCompletion = await fetchChildWorkItemsWithCompletion(
-          f.id,
-          'Feature',
-          orgUrl,
-          project,
-          headers
-        );
-        
-        epic.features.push({
+        const feature: any = {
           id: f.id.toString(),
           title: f.fields['System.Title'],
+          state: featureState,
           iterationStart: featureIterationDates.startDate,
           iterationEnd: featureIterationDates.finishDate,
-          userStoryCount: featureCompletion.total,
-          completedUserStoryCount: featureCompletion.completed
-        });
+          userStories: [],
+          userStoryCount: 0,
+          completedUserStoryCount: 0
+        };
+        
+        // Fetch User Stories for this Feature
+        feature.userStories = await fetchChildWorkItems(
+          orgUrl,
+          project,
+          f.id,
+          'User Story',
+          headers,
+          iterationMap
+        );
+        
+        epic.features.push(feature);
       }
     }
 
@@ -408,6 +556,10 @@ export async function fetchWorkItemsLocal(
       epics
     }));
 
+  // Calculate completion counts
+  console.log('=== Calculating completion counts ===');
+  updateCompletionCounts(result);
+
   return result;
 }
 
@@ -418,6 +570,12 @@ export async function fetchWorkItemsFromQuery(queryGuid: string): Promise<ValueS
   const projectId = projectData.project.id;
   const projectName = projectData.project.name;
 
+  console.log('=== Starting Work Items Fetch (SDK) ===');
+
+  // Fetch iteration dates
+  const iterationMap = await fetchClassificationNodesSDK(client, projectId, projectName);
+
+  // Get work items from query
   const queryResult = await client.queryById(queryGuid, projectId);
   
   if (!queryResult.workItems || queryResult.workItems.length === 0) {
@@ -425,89 +583,61 @@ export async function fetchWorkItemsFromQuery(queryGuid: string): Promise<ValueS
   }
 
   const workItemIds = queryResult.workItems.map(wi => wi.id!);
-  const workItems = await client.getWorkItems(
-    workItemIds,
-    projectId,
-    ['System.Id', 'System.Title', 'System.IterationPath', 'System.AreaPath', 'System.WorkItemType', 'System.TeamProject']
-  );
+  const workItems = await fetchWorkItemsByIdsSDK(client, projectId, workItemIds);
 
   const projectWorkItems = workItems.filter(wi => wi.fields['System.TeamProject'] === projectName);
   const epics = projectWorkItems.filter(wi => wi.fields['System.WorkItemType'] === 'Epic');
-  const features = projectWorkItems.filter(wi => wi.fields['System.WorkItemType'] === 'Feature');
-  
-  const iterationMap = new Map<string, { startDate: string; finishDate: string }>();
-  
-  try {
-    const classificationNode = await client.getClassificationNode(
-      projectId, 
-      TreeStructureGroup.Iterations, 
-      undefined, 
-      10
-    );
-    
-    const extractedIterations = extractIterationsFromNode(classificationNode, projectName);
-    extractedIterations.forEach((value, key) => {
-      iterationMap.set(key, value);
-    });
-  } catch (error) {
-    console.error('Error fetching classification nodes:', error);
-  }
   
   const valueStreamMap = new Map<string, any[]>();
 
+  // Build Epic hierarchy
   for (const epicWi of epics) {
     const iterationPath = epicWi.fields['System.IterationPath'];
     const areaPath = epicWi.fields['System.AreaPath'];
+    const state = epicWi.fields['System.State'];
     
     if (!iterationPath) continue;
     
     const iterationData = findIterationDates(iterationPath, projectName, iterationMap);
     if (!iterationData) continue;
     
-    // Fetch Epic's child Features with completion status using SDK
-    const epicCompletion = await fetchChildWorkItemsWithCompletionSDK(
-      epicWi.id!,
-      'Epic',
-      client,
-      projectId,
-      projectName
-    );
-    
     const epic: any = {
       id: epicWi.id!.toString(),
       title: epicWi.fields['System.Title'],
+      state: state,
       iterationStart: iterationData.startDate,
       iterationEnd: iterationData.finishDate,
       features: [],
-      featureCount: epicCompletion.total,
-      completedFeatureCount: epicCompletion.completed
+      featureCount: 0,
+      completedFeatureCount: 0
     };
 
-    for (const f of features.filter(feat => epicCompletion.childIds.includes(feat.id!))) {
-      const featureIterationPath = f.fields['System.IterationPath'];
+    // Fetch Features for this Epic
+    const features = await fetchChildWorkItemsSDK(
+      client,
+      projectId,
+      projectName,
+      epicWi.id!,
+      'Feature',
+      iterationMap
+    );
+
+    for (const feature of features) {
+      feature.userStories = [];
+      feature.userStoryCount = 0;
+      feature.completedUserStoryCount = 0;
       
-      if (!featureIterationPath) continue;
-      
-      const featureIterationData = findIterationDates(featureIterationPath, projectName, iterationMap);
-      if (!featureIterationData) continue;
-      
-      // Fetch Feature's child User Stories with completion status using SDK
-      const featureCompletion = await fetchChildWorkItemsWithCompletionSDK(
-        f.id!,
-        'Feature',
+      // Fetch User Stories for this Feature
+      feature.userStories = await fetchChildWorkItemsSDK(
         client,
         projectId,
-        projectName
+        projectName,
+        parseInt(feature.id),
+        'User Story',
+        iterationMap
       );
       
-      epic.features.push({
-        id: f.id!.toString(),
-        title: f.fields['System.Title'],
-        iterationStart: featureIterationData.startDate,
-        iterationEnd: featureIterationData.finishDate,
-        userStoryCount: featureCompletion.total,
-        completedUserStoryCount: featureCompletion.completed
-      });
+      epic.features.push(feature);
     }
 
     if (!valueStreamMap.has(areaPath)) {
@@ -523,6 +653,10 @@ export async function fetchWorkItemsFromQuery(queryGuid: string): Promise<ValueS
       name: name.split('\\').pop() || name,
       epics
     }));
+
+  // Calculate completion counts
+  console.log('=== Calculating completion counts ===');
+  updateCompletionCounts(result);
 
   return result;
 }

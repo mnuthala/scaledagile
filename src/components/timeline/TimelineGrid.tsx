@@ -1,6 +1,7 @@
 import React from 'react';
 import { TimelineMonth, Quarter } from '../../types/timeline.types';
 import { TodayIndicator } from './TodayIndicator';
+import { useSettings } from './SettingsContext';
 
 interface TimelineGridProps {
   vsWidth: string;
@@ -23,6 +24,8 @@ export const TimelineGrid: React.FC<TimelineGridProps> = ({
   timelineEnd,
   getCurrentDatePosition,
 }) => {
+  const { settings } = useSettings();
+
   return (
     <div className="sticky top-0 z-10 bg-white border-b-2 border-gray-300 flex">
       <div className={`${vsWidth} flex-shrink-0 border-r-2 border-gray-300 bg-gray-100 p-2 font-semibold text-sm flex items-center justify-center`}>
@@ -54,7 +57,7 @@ export const TimelineGrid: React.FC<TimelineGridProps> = ({
           ))}
         </div>
 
-        {today >= timelineStart && today <= timelineEnd && (
+        {settings.showTodayIndicator && today >= timelineStart && today <= timelineEnd && (
           <TodayIndicator position={getCurrentDatePosition()} showLabel={true} />
         )}
       </div>

@@ -1,35 +1,40 @@
 import React, { useState, useRef } from 'react';
-import { Calendar, Eye } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { TimelineHeader } from './TimelineHeader';
 import { TimelineGrid } from './TimelineGrid';
+import { TimelineToolbar, ViewLevel } from './TimelineToolbar';
+import { SettingsModal } from './SettingsModal';
 import { ValueStreamRow } from './ValueStreamRow';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { useTimelineData } from '../../hooks/useTimelineData';
 import { useResponsive } from '../../hooks/useResponsive';
 import { calculateTimelineRange, generateTimeline, groupTimelineByQuarters } from '../../utils/dateHelpers';
-import { getCurrentDatePosition, calculateRowHeight } from '../../utils/timelineCalculations';
+import { getCurrentDatePosition } from '../../utils/timelineCalculations';
 import { ZOOM } from '../../utils/constants';
-
-type ViewLevel = 'epic' | 'feature';
 
 export const TimelineView: React.FC = () => {
   const { data, loading, error } = useTimelineData();
   const { vsWidth } = useResponsive();
-  const [expandedEpics, setExpandedEpics] = useState<{[key: string]: boolean}>({});
+  const [expandedItems, setExpandedItems] = useState<{[key: string]: boolean}>({});
   const [quarterOffset, setQuarterOffset] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(ZOOM.DEFAULT);
   const [viewLevel, setViewLevel] = useState<ViewLevel>('epic');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const today = new Date();
+
+  // Add defensive check
+  const safeData = data || { valueStreams: [] };
+  const valueStreams = safeData.valueStreams || [];
 
   const { timelineStart, timelineEnd } = calculateTimelineRange(quarterOffset);
   const timeline = generateTimeline(timelineStart, timelineEnd);
   const quarters = groupTimelineByQuarters(timeline);
   const monthColumnWidth = `${(1 / timeline.length) * 100}%`;
 
-  const toggleEpic = (epicId: string) => {
-    setExpandedEpics(prev => ({ ...prev, [epicId]: !prev[epicId] }));
+  const toggleItem = (itemId: string) => {
+    setExpandedItems(prev => ({ ...prev, [itemId]: !prev[itemId] }));
   };
 
   const handleZoomIn = () => {
@@ -57,14 +62,22 @@ export const TimelineView: React.FC = () => {
   const handleViewLevelChange = (level: ViewLevel) => {
     setViewLevel(level);
     if (level === 'feature') {
-      const allEpicsExpanded: {[key: string]: boolean} = {};
+      const allItemsExpanded: {[key: string]: boolean} = {};
       data?.valueStreams.forEach(vs => {
-        vs.epics.forEach(epic => {
-          allEpicsExpanded[epic.id] = true;
+        vs.workItems.forEach(item => {
+          allItemsExpanded[item.id] = true;
         });
       });
-      setExpandedEpics(allEpicsExpanded);
+      setExpandedItems(allItemsExpanded);
     }
+  };
+
+  const handleOpenSettings = () => {
+    setIsSettingsOpen(true);
+  };
+
+  const handleCloseSettings = () => {
+    setIsSettingsOpen(false);
   };
 
   if (loading) {
@@ -79,6 +92,7 @@ export const TimelineView: React.FC = () => {
           onToday={handleToday}
         />
         <LoadingSpinner />
+        <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
       </div>
     );
   }
@@ -95,6 +109,7 @@ export const TimelineView: React.FC = () => {
           onToday={handleToday}
         />
         <ErrorMessage message={error} />
+        <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
       </div>
     );
   }
@@ -118,6 +133,7 @@ export const TimelineView: React.FC = () => {
             <p className="text-xs mt-2 text-gray-500">Make sure your epics are assigned to iterations with start and end dates.</p>
           </div>
         </div>
+        <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
       </div>
     );
   }
@@ -133,73 +149,15 @@ export const TimelineView: React.FC = () => {
         onToday={handleToday}
       />
 
-      <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Eye className="w-4 h-4 text-gray-600" />
-          <span className="text-sm font-medium text-gray-700">View:</span>
-          
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => handleViewLevelChange('epic')}
-              className={`
-                flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all
-                ${viewLevel === 'epic' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }
-              `}
-              title="Show Epic Level"
-            >
-              <span>Epic</span>
-            </button>
-            
-            <button
-              onClick={() => handleViewLevelChange('feature')}
-              className={`
-                flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all
-                ${viewLevel === 'feature' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }
-              `}
-              title="Show Feature Level"
-            >
-              <span>Feature</span>
-            </button>
-          </div>
-        </div>
+      <TimelineToolbar
+        viewLevel={viewLevel}
+        onViewLevelChange={handleViewLevelChange}
+        valueStreamsCount={data.valueStreams.length}
+        workItemsCount={data.valueStreams.reduce((sum, vs) => sum + vs.workItems.length, 0)}
+        onOpenSettings={handleOpenSettings}
+      />
 
-        <div className="hidden md:flex items-center gap-4 text-sm text-gray-600">
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium">{data.valueStreams.length}</span>
-            <span>Value Streams</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium">
-              {data.valueStreams.reduce((sum, vs) => sum + vs.epics.length, 0)}
-            </span>
-            <span>Epics</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium">
-              {data.valueStreams.reduce((sum, vs) => 
-                sum + vs.epics.reduce((eSum, e) => eSum + (e.featureCount || e.features.length), 0), 0
-              )}
-            </span>
-            <span>Features</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium">
-              {data.valueStreams.reduce((sum, vs) => 
-                sum + vs.epics.reduce((eSum, e) => 
-                  eSum + e.features.reduce((fSum, f) => fSum + (f.userStoryCount || 0), 0), 0
-                ), 0
-              )}
-            </span>
-            <span>User Stories</span>
-          </div>
-        </div>
-      </div>
+      <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
 
       <div className="flex-1 overflow-auto relative" ref={timelineRef}>
         <div 
@@ -224,10 +182,8 @@ export const TimelineView: React.FC = () => {
 
             <div className="flex-1">
               {data.valueStreams
-                .filter(vs => vs.epics.length > 0)
+                .filter(vs => vs.workItems.length > 0)
                 .map((vs) => {
-                  const rowHeight = calculateRowHeight(vs, expandedEpics);
-                  
                   return (
                     <ValueStreamRow
                       key={vs.id}
@@ -235,9 +191,8 @@ export const TimelineView: React.FC = () => {
                       vsWidth={vsWidth}
                       timeline={timeline}
                       monthColumnWidth={monthColumnWidth}
-                      expandedEpics={expandedEpics}
-                      onToggleEpic={toggleEpic}
-                      rowHeight={rowHeight}
+                      expandedItems={expandedItems}
+                      onToggleItem={toggleItem}
                       today={today}
                       timelineStart={timelineStart}
                       timelineEnd={timelineEnd}

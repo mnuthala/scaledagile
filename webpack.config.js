@@ -17,8 +17,7 @@ module.exports = (env, argv) => {
 
   return {
     entry: {
-      main: './src/index.tsx',
-      settings: './src/settings.tsx'
+      main: './src/index.tsx'
     },
     output: {
       filename: '[name].bundle.js',
@@ -98,18 +97,7 @@ module.exports = (env, argv) => {
           removeAttributeQuotes: true
         }
       }),
-      // HTML plugin for settings view
-      new HtmlWebpackPlugin({
-        template: './src/settings.html',
-        filename: 'settings.html',
-        chunks: ['settings'],
-        inject: 'body',
-        minify: isDevelopment ? false : {
-          removeComments: true,
-          collapseWhitespace: true,
-          removeAttributeQuotes: true
-        }
-      }),
+    
       // Copy static assets
       new CopyWebpackPlugin({
         patterns: [
