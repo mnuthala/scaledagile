@@ -13,13 +13,24 @@ import { calculateTimelineRange, generateTimeline, groupTimelineByQuarters } fro
 import { getCurrentDatePosition } from '../../utils/timelineCalculations';
 import { ZOOM } from '../../utils/constants';
 
+type RootWorkItemType = 'Epic' | 'Feature';
+
+// Helper to convert ViewLevel to RootWorkItemType
+function getRootWorkItemType(viewLevel: ViewLevel): RootWorkItemType {
+  // 'epic' view = Epic root
+  // 'feature' view = Feature root
+  // 'story' view = Epic root (but expanded)
+  return viewLevel === 'feature' ? 'Feature' : 'Epic';
+}
+
 export const TimelineView: React.FC = () => {
-  const { data, loading, error } = useTimelineData();
+  const [viewLevel, setViewLevel] = useState<ViewLevel>('epic'); // Default to Epic
+  const rootWorkItemType = getRootWorkItemType(viewLevel);
+  const { data, loading, error } = useTimelineData(rootWorkItemType);
   const { vsWidth } = useResponsive();
   const [expandedItems, setExpandedItems] = useState<{[key: string]: boolean}>({});
   const [quarterOffset, setQuarterOffset] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(ZOOM.DEFAULT);
-  const [viewLevel, setViewLevel] = useState<ViewLevel>('epic');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const today = new Date();
@@ -61,14 +72,35 @@ export const TimelineView: React.FC = () => {
 
   const handleViewLevelChange = (level: ViewLevel) => {
     setViewLevel(level);
-    if (level === 'feature') {
+    
+    // Determine expand/collapse behavior based on view level
+    if (level === 'story') {
+      // Story view: Expand everything to show stories
       const allItemsExpanded: {[key: string]: boolean} = {};
       data?.valueStreams.forEach(vs => {
         vs.workItems.forEach(item => {
           allItemsExpanded[item.id] = true;
+          // Also expand children if they exist
+          if (item.children) {
+            item.children.forEach(child => {
+              allItemsExpanded[child.id] = true;
+            });
+          }
         });
       });
       setExpandedItems(allItemsExpanded);
+    } else if (level === 'feature' && rootWorkItemType === 'Epic') {
+      // Feature view with Epic root: Expand epics to show features
+      const topLevelExpanded: {[key: string]: boolean} = {};
+      data?.valueStreams.forEach(vs => {
+        vs.workItems.forEach(item => {
+          topLevelExpanded[item.id] = true;
+        });
+      });
+      setExpandedItems(topLevelExpanded);
+    } else {
+      // Epic view or Feature root: Collapse all
+      setExpandedItems({});
     }
   };
 
@@ -80,6 +112,40 @@ export const TimelineView: React.FC = () => {
     setIsSettingsOpen(false);
   };
 
+  // Calculate counts for different work item types
+  const calculateCounts = () => {
+    let epicsCount = 0;
+    let featuresCount = 0;
+    let storiesCount = 0;
+
+    valueStreams.forEach(vs => {
+      vs.workItems.forEach(item => {
+        if (item.workItemType === 'Epic') {
+          epicsCount++;
+          if (item.children) {
+            featuresCount += item.children.length;
+            item.children.forEach(child => {
+              if (child.children) {
+                storiesCount += child.children.length;
+              }
+            });
+          }
+        } else if (item.workItemType === 'Feature') {
+          featuresCount++;
+          if (item.children) {
+            storiesCount += item.children.length;
+          }
+        } else if (item.workItemType === 'User Story') {
+          storiesCount++;
+        }
+      });
+    });
+
+    return { epicsCount, featuresCount, storiesCount };
+  };
+
+  const { epicsCount, featuresCount, storiesCount } = calculateCounts();
+
   if (loading) {
     return (
       <div className="w-full h-screen bg-gray-50 overflow-hidden flex flex-col">
@@ -90,6 +156,16 @@ export const TimelineView: React.FC = () => {
           onPreviousQuarter={handlePreviousQuarter}
           onNextQuarter={handleNextQuarter}
           onToday={handleToday}
+        />
+        <TimelineToolbar
+          viewLevel={viewLevel}
+          onViewLevelChange={handleViewLevelChange}
+          valueStreamsCount={0}
+          workItemsCount={0}
+          epicsCount={0}
+          featuresCount={0}
+          userStoriesCount={0}
+          onOpenSettings={handleOpenSettings}
         />
         <LoadingSpinner />
         <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
@@ -108,13 +184,25 @@ export const TimelineView: React.FC = () => {
           onNextQuarter={handleNextQuarter}
           onToday={handleToday}
         />
+        <TimelineToolbar
+          viewLevel={viewLevel}
+          onViewLevelChange={handleViewLevelChange}
+          valueStreamsCount={0}
+          workItemsCount={0}
+          epicsCount={0}
+          featuresCount={0}
+          userStoriesCount={0}
+          onOpenSettings={handleOpenSettings}
+        />
         <ErrorMessage message={error} />
         <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
       </div>
     );
   }
 
-  if (data.valueStreams.length === 0) {
+  if (valueStreams.length === 0) {
+    const rootTypeName = rootWorkItemType === 'Epic' ? 'epics' : 'features';
+    
     return (
       <div className="w-full h-screen bg-gray-50 overflow-hidden flex flex-col">
         <TimelineHeader
@@ -125,12 +213,23 @@ export const TimelineView: React.FC = () => {
           onNextQuarter={handleNextQuarter}
           onToday={handleToday}
         />
+        <TimelineToolbar
+          viewLevel={viewLevel}
+          onViewLevelChange={handleViewLevelChange}
+          valueStreamsCount={0}
+          workItemsCount={0}
+          epicsCount={0}
+          featuresCount={0}
+          userStoriesCount={0}
+          onOpenSettings={handleOpenSettings}
+        />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-gray-600">
             <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-400" />
             <p className="text-lg font-semibold mb-2">No Data Available</p>
-            <p className="text-sm">No epics with valid iterations found in your Azure DevOps project.</p>
-            <p className="text-xs mt-2 text-gray-500">Make sure your epics are assigned to iterations with start and end dates.</p>
+            <p className="text-sm">No {rootTypeName} with valid iterations found in your Azure DevOps project.</p>
+            <p className="text-xs mt-2 text-gray-500">Make sure your {rootTypeName} are assigned to iterations with start and end dates.</p>
+            <p className="text-xs mt-1 text-gray-500">Currently showing: Previous, Current, and Next iterations.</p>
           </div>
         </div>
         <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
@@ -152,8 +251,11 @@ export const TimelineView: React.FC = () => {
       <TimelineToolbar
         viewLevel={viewLevel}
         onViewLevelChange={handleViewLevelChange}
-        valueStreamsCount={data.valueStreams.length}
-        workItemsCount={data.valueStreams.reduce((sum, vs) => sum + vs.workItems.length, 0)}
+        valueStreamsCount={valueStreams.length}
+        workItemsCount={valueStreams.reduce((sum, vs) => sum + vs.workItems.length, 0)}
+        epicsCount={epicsCount}
+        featuresCount={featuresCount}
+        userStoriesCount={storiesCount}
         onOpenSettings={handleOpenSettings}
       />
 
@@ -181,7 +283,7 @@ export const TimelineView: React.FC = () => {
             />
 
             <div className="flex-1">
-              {data.valueStreams
+              {valueStreams
                 .filter(vs => vs.workItems.length > 0)
                 .map((vs) => {
                   return (

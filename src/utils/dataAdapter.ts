@@ -1,259 +1,193 @@
-/**
- * Data Adapter
- * 
- * Transforms different data formats into the generic work item structure
- */
+// dataAdapter.ts - Updated to handle generic recursive structure
 
-// Generic work item types (inline to avoid extra file)
 export interface GenericWorkItem {
   id: string;
-  title: string;
+  title?: string;
   name?: string;
-  iterationStart: string;
-  iterationEnd: string;
+  workItemType: string;
   state?: string;
   stateCategory?: string;
-  workItemType?: string;
+  iterationStart: string;
+  iterationEnd: string;
+  iterationPath?: string;
+  assignedTo?: string;
   children?: GenericWorkItem[];
-  parentId?: string;
-  [key: string]: any;
+  
+  // Backwards compatibility properties
+  featureCount?: number;
+  completedFeatureCount?: number;
+  userStoryCount?: number;
+  completedUserStoryCount?: number;
+  completedStories?: number;
 }
 
 export interface ValueStreamData {
   id: string;
   name: string;
   workItems: GenericWorkItem[];
-  [key: string]: any;
 }
 
 export interface TimelineData {
   valueStreams: ValueStreamData[];
-  lastUpdated?: string;
-  metadata?: { [key: string]: any };
-}
-
-// Legacy format (your current structure)
-interface LegacyEpic {
-  id: string;
-  title: string;
-  iterationStart: string;
-  iterationEnd: string;
-  state?: string;
-  features: LegacyFeature[];
-  featureCount?: number;
-  completedFeatureCount?: number;
-}
-
-interface LegacyFeature {
-  id: string;
-  title: string;
-  iterationStart: string;
-  iterationEnd: string;
-  state?: string;
-  userStories?: any[];
-  userStoryCount?: number;
-  completedUserStoryCount?: number;
-}
-
-interface LegacyValueStream {
-  id: string;
-  name: string;
-  epics: LegacyEpic[];
-}
-
-interface LegacyTimelineData {
-  valueStreams: LegacyValueStream[];
 }
 
 /**
- * Transform legacy epic-feature-story structure to generic work items
+ * Transform legacy data format (epics/features/userStories) to new generic format
  */
-export function transformLegacyData(legacyData: LegacyTimelineData): TimelineData {
-  console.log('transformLegacyData input:', legacyData);
-  
-  // Defensive checks
-  if (!legacyData) {
-    console.error('transformLegacyData: legacyData is null or undefined');
-    return { valueStreams: [], lastUpdated: new Date().toISOString() };
+export function transformLegacyData(data: any): TimelineData {
+  if (!data || !data.valueStreams) {
+    return { valueStreams: [] };
   }
 
-  if (!legacyData.valueStreams) {
-    console.error('transformLegacyData: legacyData.valueStreams is null or undefined');
-    return { valueStreams: [], lastUpdated: new Date().toISOString() };
-  }
-
-  if (!Array.isArray(legacyData.valueStreams)) {
-    console.error('transformLegacyData: legacyData.valueStreams is not an array');
-    return { valueStreams: [], lastUpdated: new Date().toISOString() };
-  }
-
-  return {
-    valueStreams: legacyData.valueStreams.map(vs => {
-      if (!vs) {
-        console.warn('transformLegacyData: Skipping null/undefined value stream');
-        return null;
-      }
+  const valueStreams: ValueStreamData[] = data.valueStreams.map((vs: any) => {
+    // Check if it's already in the new format (has workItems)
+    if (vs.workItems) {
       return {
-        id: vs.id || 'unknown',
-        name: vs.name || 'Unnamed Value Stream',
-        workItems: (vs.epics && Array.isArray(vs.epics)) 
-          ? vs.epics.map(epic => transformEpicToWorkItem(epic)).filter(item => item !== null)
-          : []
+        id: vs.id,
+        name: vs.name,
+        workItems: vs.workItems
       };
-    }).filter(vs => vs !== null) as ValueStreamData[],
-    lastUpdated: new Date().toISOString()
-  };
-}
-
-function transformEpicToWorkItem(epic: LegacyEpic): GenericWorkItem | null {
-  if (!epic) {
-    console.warn('transformEpicToWorkItem: epic is null or undefined');
-    return null;
-  }
-
-  return {
-    id: epic.id || `epic-${Date.now()}`,
-    title: epic.title || 'Untitled Epic',
-    iterationStart: epic.iterationStart || new Date().toISOString(),
-    iterationEnd: epic.iterationEnd || new Date().toISOString(),
-    state: epic.state,
-    workItemType: 'Epic',
-    children: (epic.features && Array.isArray(epic.features))
-      ? epic.features.map(feature => transformFeatureToWorkItem(feature)).filter(item => item !== null)
-      : [],
-    // Preserve original data - use these for progress
-    featureCount: epic.featureCount,
-    completedFeatureCount: epic.completedFeatureCount,
-  };
-}
-
-function transformFeatureToWorkItem(feature: LegacyFeature): GenericWorkItem | null {
-  if (!feature) {
-    console.warn('transformFeatureToWorkItem: feature is null or undefined');
-    return null;
-  }
-
-  return {
-    id: feature.id || `feature-${Date.now()}`,
-    title: feature.title || 'Untitled Feature',
-    iterationStart: feature.iterationStart || new Date().toISOString(),
-    iterationEnd: feature.iterationEnd || new Date().toISOString(),
-    state: feature.state,
-    workItemType: 'Feature',
-    children: (feature.userStories && Array.isArray(feature.userStories))
-      ? feature.userStories.map(story => {
-          if (!story) return null;
-          return {
-            id: story.id || `story-${Math.random()}`,
-            title: story.title || story.name || 'Untitled Story',
-            iterationStart: story.iterationStart || feature.iterationStart,
-            iterationEnd: story.iterationEnd || feature.iterationEnd,
-            state: story.state || story.State,
-            stateCategory: story.stateCategory || story.StateCategory,
-            workItemType: 'User Story',
-          } as GenericWorkItem;
-        }).filter((item): item is GenericWorkItem => item !== null)
-      : [],
-    // Preserve original data
-    userStoryCount: feature.userStoryCount,
-    completedUserStoryCount: feature.completedUserStoryCount,
-  };
-}
-
-/**
- * Transform flat list of work items into hierarchical structure
- * Useful when your API returns a flat list with parentId references
- */
-export function buildHierarchy(flatItems: GenericWorkItem[]): GenericWorkItem[] {
-  const itemMap = new Map<string, GenericWorkItem>();
-  const rootItems: GenericWorkItem[] = [];
-
-  // First pass: create map of all items
-  flatItems.forEach(item => {
-    itemMap.set(item.id, { ...item, children: [] });
-  });
-
-  // Second pass: build hierarchy
-  flatItems.forEach(item => {
-    const workItem = itemMap.get(item.id)!;
-    
-    if (item.parentId) {
-      const parent = itemMap.get(item.parentId);
-      if (parent) {
-        if (!parent.children) {
-          parent.children = [];
-        }
-        parent.children.push(workItem);
-      } else {
-        // Parent not found, treat as root
-        rootItems.push(workItem);
-      }
-    } else {
-      // No parent, it's a root item
-      rootItems.push(workItem);
     }
+
+    // Transform from old format (epics/features/userStories)
+    if (vs.epics) {
+      const workItems = vs.epics.map((epic: any) => transformEpicToWorkItem(epic));
+      return {
+        id: vs.id,
+        name: vs.name,
+        workItems
+      };
+    }
+
+    return {
+      id: vs.id,
+      name: vs.name,
+      workItems: []
+    };
   });
 
-  return rootItems;
+  return { valueStreams };
 }
 
 /**
- * Transform Azure DevOps query results
+ * Transform old Epic structure to generic WorkItem
  */
-export function transformAzureDevOpsQueryResults(queryResults: any[]): GenericWorkItem[] {
-  return queryResults.map(item => ({
-    id: item.id?.toString() || item.fields?.['System.Id']?.toString(),
-    title: item.fields?.['System.Title'] || 'Untitled',
-    iterationStart: item.fields?.['Microsoft.VSTS.Scheduling.StartDate'] || 
-                    item.fields?.['System.IterationPath.StartDate'],
-    iterationEnd: item.fields?.['Microsoft.VSTS.Scheduling.FinishDate'] || 
-                  item.fields?.['System.IterationPath.EndDate'],
-    state: item.fields?.['System.State'],
-    stateCategory: item.fields?.['System.StateCategory'],
-    workItemType: item.fields?.['System.WorkItemType'],
-    parentId: item.fields?.['System.Parent']?.toString(),
-    assignedTo: item.fields?.['System.AssignedTo']?.displayName,
-    priority: item.fields?.['Microsoft.VSTS.Common.Priority'],
-    tags: item.fields?.['System.Tags']?.split(';').map((t: string) => t.trim()),
-    description: item.fields?.['System.Description'],
-    // Include all original fields
-    ...item.fields
-  }));
+function transformEpicToWorkItem(epic: any): GenericWorkItem {
+  const workItem: GenericWorkItem = {
+    id: epic.id,
+    title: epic.title,
+    name: epic.name,
+    workItemType: epic.workItemType || 'Epic',
+    state: epic.state,
+    iterationStart: epic.iterationStart,
+    iterationEnd: epic.iterationEnd,
+    iterationPath: epic.iterationPath,
+    assignedTo: epic.assignedTo,
+    children: [],
+    featureCount: epic.featureCount,
+    completedFeatureCount: epic.completedFeatureCount
+  };
+
+  // Transform features to children
+  if (epic.features && Array.isArray(epic.features)) {
+    workItem.children = epic.features.map((feature: any) => transformFeatureToWorkItem(feature));
+  }
+
+  return workItem;
 }
 
 /**
- * Transform JIRA query results
+ * Transform old Feature structure to generic WorkItem
  */
-export function transformJiraQueryResults(jiraIssues: any[]): GenericWorkItem[] {
-  return jiraIssues.map(issue => ({
-    id: issue.key || issue.id,
-    title: issue.fields?.summary || 'Untitled',
-    iterationStart: issue.fields?.customfield_startdate || issue.fields?.created,
-    iterationEnd: issue.fields?.customfield_enddate || issue.fields?.duedate,
-    state: issue.fields?.status?.name,
-    stateCategory: issue.fields?.status?.statusCategory?.name,
-    workItemType: issue.fields?.issuetype?.name,
-    parentId: issue.fields?.parent?.key,
-    assignedTo: issue.fields?.assignee?.displayName,
-    priority: issue.fields?.priority?.name,
-    tags: issue.fields?.labels,
-    description: issue.fields?.description,
-    // Include all original fields
-    ...issue.fields
-  }));
+function transformFeatureToWorkItem(feature: any): GenericWorkItem {
+  const workItem: GenericWorkItem = {
+    id: feature.id,
+    title: feature.title,
+    name: feature.name,
+    workItemType: feature.workItemType || 'Feature',
+    state: feature.state,
+    iterationStart: feature.iterationStart,
+    iterationEnd: feature.iterationEnd,
+    iterationPath: feature.iterationPath,
+    assignedTo: feature.assignedTo,
+    children: [],
+    userStoryCount: feature.userStoryCount,
+    completedUserStoryCount: feature.completedUserStoryCount
+  };
+
+  // Transform user stories to children
+  if (feature.userStories && Array.isArray(feature.userStories)) {
+    workItem.children = feature.userStories.map((story: any) => transformUserStoryToWorkItem(story));
+  }
+
+  return workItem;
 }
 
 /**
- * Example usage:
- * 
- * // From legacy format
- * const genericData = transformLegacyData(legacyData);
- * 
- * // From flat Azure DevOps query
- * const adoItems = transformAzureDevOpsQueryResults(queryResults);
- * const hierarchicalItems = buildHierarchy(adoItems);
- * 
- * // From JIRA
- * const jiraItems = transformJiraQueryResults(jiraIssues);
- * const hierarchicalJiraItems = buildHierarchy(jiraItems);
+ * Transform old UserStory structure to generic WorkItem
  */
+function transformUserStoryToWorkItem(story: any): GenericWorkItem {
+  return {
+    id: story.id,
+    title: story.title,
+    name: story.name,
+    workItemType: story.workItemType || 'User Story',
+    state: story.state,
+    iterationStart: story.iterationStart,
+    iterationEnd: story.iterationEnd,
+    iterationPath: story.iterationPath,
+    assignedTo: story.assignedTo,
+    children: []
+  };
+}
+
+/**
+ * Get all work items in a flat list (for filtering, searching, etc.)
+ */
+export function flattenWorkItems(workItems: GenericWorkItem[]): GenericWorkItem[] {
+  const result: GenericWorkItem[] = [];
+  
+  function flatten(items: GenericWorkItem[]) {
+    items.forEach(item => {
+      result.push(item);
+      if (item.children && item.children.length > 0) {
+        flatten(item.children);
+      }
+    });
+  }
+  
+  flatten(workItems);
+  return result;
+}
+
+/**
+ * Find a work item by ID in the hierarchy
+ */
+export function findWorkItemById(workItems: GenericWorkItem[], id: string): GenericWorkItem | null {
+  for (const item of workItems) {
+    if (item.id === id) {
+      return item;
+    }
+    if (item.children && item.children.length > 0) {
+      const found = findWorkItemById(item.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Get the depth/level of a work item in the hierarchy
+ */
+export function getWorkItemDepth(workItems: GenericWorkItem[], targetId: string, currentDepth: number = 0): number {
+  for (const item of workItems) {
+    if (item.id === targetId) {
+      return currentDepth;
+    }
+    if (item.children && item.children.length > 0) {
+      const depth = getWorkItemDepth(item.children, targetId, currentDepth + 1);
+      if (depth !== -1) return depth;
+    }
+  }
+  return -1;
+}

@@ -87,22 +87,38 @@ interface WorkItemConfig {
 }
 
 const WORK_ITEM_TYPE_MAP: { [key: string]: Partial<WorkItemConfig> } = {
-  // Epic variants
-  'epic': { type: 'epic', borderColor: COLORS.EPIC_BORDER, progressBarColor: COLORS.EPIC_PROGRESS, height: 80, spacing: 90, showChevron: true, showProgress: true },
+  // Epic variants - Increased height to accommodate progress bar
+  'epic': { 
+    type: 'epic', 
+    borderColor: COLORS.EPIC_BORDER, 
+    progressBarColor: COLORS.EPIC_PROGRESS, 
+    height: 100,  // Increased from 80
+    spacing: 110, // Increased from 90
+    showChevron: true, 
+    showProgress: true 
+  },
   
-  // Feature variants
-  'feature': { type: 'feature', borderColor: COLORS.FEATURE_BORDER, progressBarColor: COLORS.FEATURE_PROGRESS, height: 60, spacing: 70, showChevron: true, showProgress: true },
+  // Feature variants - Increased height to accommodate progress bar
+  'feature': { 
+    type: 'feature', 
+    borderColor: COLORS.FEATURE_BORDER, 
+    progressBarColor: COLORS.FEATURE_PROGRESS, 
+    height: 80,   // Increased from 60
+    spacing: 90,  // Increased from 70
+    showChevron: true, 
+    showProgress: true 
+  },
   
   // Story variants
-  'user story': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 40, spacing: 50, showChevron: true, showProgress: true },
-  'story': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 40, spacing: 50, showChevron: true, showProgress: true },
-  'product backlog item': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 40, spacing: 50, showChevron: true, showProgress: true },
-  'backlog item': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 40, spacing: 50, showChevron: true, showProgress: true },
+  'user story': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
+  'story': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
+  'product backlog item': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
+  'backlog item': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
   
   // Task variants
-  'task': { type: 'task', borderColor: 'border-gray-500', progressBarColor: 'bg-gray-500', height: 30, spacing: 40, showChevron: false, showProgress: false },
-  'bug': { type: 'task', borderColor: 'border-red-500', progressBarColor: 'bg-red-500', height: 30, spacing: 40, showChevron: false, showProgress: false },
-  'issue': { type: 'task', borderColor: 'border-orange-500', progressBarColor: 'bg-orange-500', height: 30, spacing: 40, showChevron: false, showProgress: false },
+  'task': { type: 'task', borderColor: 'border-gray-500', progressBarColor: 'bg-gray-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
+  'bug': { type: 'task', borderColor: 'border-red-500', progressBarColor: 'bg-red-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
+  'issue': { type: 'task', borderColor: 'border-orange-500', progressBarColor: 'bg-orange-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
 };
 
 function getWorkItemConfig(workItem: GenericWorkItem): WorkItemConfig {
@@ -127,8 +143,8 @@ function getWorkItemConfig(workItem: GenericWorkItem): WorkItemConfig {
       type: 'epic',
       borderColor: COLORS.EPIC_BORDER,
       progressBarColor: COLORS.EPIC_PROGRESS,
-      height: 80,
-      spacing: 90,
+      height: 100,
+      spacing: 110,
       showChevron: true,
       showProgress: true,
     };
@@ -244,8 +260,6 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
                 state: workItem.state,
                 workItemType: workItem.workItemType,
                 childCount: workItem.children?.length || 0,
-                iterationPath: workItem.iterationPath,
-                assignedTo: workItem.assignedTo,
               }}
             />
 
@@ -301,7 +315,7 @@ export const ValueStreamRow: React.FC<ValueStreamRowProps> = ({
 
   return (
     <div 
-      className="flex border-b-2 border-gray-400 transition-all duration-300 relative z-0" 
+      className="flex border-b-2 border-gray-400 transition-all duration-300" 
       style={{ minHeight: `${rowHeight}px`, paddingTop: '8px', paddingBottom: '8px' }}
     >
       <div className={`${vsWidth} flex-shrink-0 border-r-2 border-gray-300 bg-blue-100 p-2 sm:p-4 flex items-center justify-center`}>
