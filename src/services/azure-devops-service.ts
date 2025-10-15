@@ -24,7 +24,8 @@ const WORK_ITEM_FIELDS = [
   'System.IterationPath',
   'System.AreaPath',
   'System.WorkItemType',
-  'System.TeamProject'
+  'System.TeamProject',
+  'System.AssignedTo'
 ];
 
 // ============================================================================
@@ -205,7 +206,7 @@ function buildChildWorkItemQuery(
 
 function buildEpicFeatureQuery(projectName: string): any {
   return {
-    /** query: `SELECT [System.Id]
+    /**  query: `SELECT [System.Id]
             FROM WorkItemLinks
             WHERE [Source].[System.TeamProject] = '${projectName}'
             AND [Source].[System.WorkItemType] = 'Epic'
@@ -309,7 +310,9 @@ async function fetchChildWorkItems(
       title: wi.fields['System.Title'],
       state: wi.fields['System.State'],
       iterationStart: iterationDates.startDate,
-      iterationEnd: iterationDates.finishDate
+      iterationEnd: iterationDates.finishDate,
+      iterationPath: iterationPath,
+      assignedTo: wi.fields['System.AssignedTo']?.displayName || 'Unassigned'
     });
   }
   
@@ -421,11 +424,26 @@ async function fetchClassificationNodesSDK(
 // MAIN FETCH FUNCTIONS
 // ============================================================================
 
+// Store org URL and project for work item links
+let cachedOrgUrl: string = '';
+let cachedProject: string = '';
+
+export function getWorkItemUrl(workItemId: string): string {
+  if (cachedOrgUrl && cachedProject) {
+    return `${cachedOrgUrl}/${cachedProject}/_workitems/edit/${workItemId}`;
+  }
+  return '';
+}
+
 export async function fetchWorkItemsLocal(
   orgUrl: string,
   project: string,
   pat: string
 ): Promise<ValueStream[]> {
+  // Cache for work item URLs
+  cachedOrgUrl = orgUrl;
+  cachedProject = project;
+  
   const auth = btoa(`:${pat}`);
   const headers = {
     'Authorization': `Basic ${auth}`,
@@ -497,6 +515,8 @@ export async function fetchWorkItemsLocal(
       state: state,
       iterationStart: iterationDates.startDate,
       iterationEnd: iterationDates.finishDate,
+      iterationPath: iterationPath,
+      assignedTo: wi.fields['System.AssignedTo']?.displayName || 'Unassigned',
       features: [],
       featureCount: 0,
       completedFeatureCount: 0
@@ -523,6 +543,8 @@ export async function fetchWorkItemsLocal(
           state: featureState,
           iterationStart: featureIterationDates.startDate,
           iterationEnd: featureIterationDates.finishDate,
+          iterationPath: featureIterationPath,
+          assignedTo: f.fields['System.AssignedTo']?.displayName || 'Unassigned',
           userStories: [],
           userStoryCount: 0,
           completedUserStoryCount: 0
@@ -569,6 +591,15 @@ export async function fetchWorkItemsFromQuery(queryGuid: string): Promise<ValueS
   const projectData = await (projectService as any).getPageData();
   const projectId = projectData.project.id;
   const projectName = projectData.project.name;
+  
+  // Cache for work item URLs (in SDK mode, get from host)
+  try {
+    const hostService = await SDK.getService('ms.vss-features.host-navigation-service');
+    cachedOrgUrl = (hostService as any).getHostUrl?.() || '';
+    cachedProject = projectName;
+  } catch (error) {
+    console.warn('Could not get host URL for work item links:', error);
+  }
 
   console.log('=== Starting Work Items Fetch (SDK) ===');
 

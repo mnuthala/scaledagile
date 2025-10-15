@@ -244,6 +244,8 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
                 state: workItem.state,
                 workItemType: workItem.workItemType,
                 childCount: workItem.children?.length || 0,
+                iterationPath: workItem.iterationPath,
+                assignedTo: workItem.assignedTo,
               }}
             />
 
@@ -299,7 +301,7 @@ export const ValueStreamRow: React.FC<ValueStreamRowProps> = ({
 
   return (
     <div 
-      className="flex border-b-2 border-gray-400 transition-all duration-300" 
+      className="flex border-b-2 border-gray-400 transition-all duration-300 relative z-0" 
       style={{ minHeight: `${rowHeight}px`, paddingTop: '8px', paddingBottom: '8px' }}
     >
       <div className={`${vsWidth} flex-shrink-0 border-r-2 border-gray-300 bg-blue-100 p-2 sm:p-4 flex items-center justify-center`}>

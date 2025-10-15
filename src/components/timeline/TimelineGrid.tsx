@@ -27,7 +27,7 @@ export const TimelineGrid: React.FC<TimelineGridProps> = ({
   const { settings } = useSettings();
 
   return (
-    <div className="sticky top-0 z-10 bg-white border-b-2 border-gray-300 flex">
+    <div className="sticky top-0 z-20 bg-white border-b-2 border-gray-300 flex">
       <div className={`${vsWidth} flex-shrink-0 border-r-2 border-gray-300 bg-gray-100 p-2 font-semibold text-sm flex items-center justify-center`}>
         Value Stream
       </div>
