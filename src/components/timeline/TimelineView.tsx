@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Calendar } from 'lucide-react';
+import { Calendar, Eye } from 'lucide-react';
 import { TimelineHeader } from './TimelineHeader';
 import { TimelineGrid } from './TimelineGrid';
 import { ValueStreamRow } from './ValueStreamRow';
@@ -11,12 +11,15 @@ import { calculateTimelineRange, generateTimeline, groupTimelineByQuarters } fro
 import { getCurrentDatePosition, calculateRowHeight } from '../../utils/timelineCalculations';
 import { ZOOM } from '../../utils/constants';
 
+type ViewLevel = 'epic' | 'feature';
+
 export const TimelineView: React.FC = () => {
   const { data, loading, error } = useTimelineData();
   const { vsWidth } = useResponsive();
   const [expandedEpics, setExpandedEpics] = useState<{[key: string]: boolean}>({});
   const [quarterOffset, setQuarterOffset] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(ZOOM.DEFAULT);
+  const [viewLevel, setViewLevel] = useState<ViewLevel>('epic');
   const timelineRef = useRef<HTMLDivElement>(null);
   const today = new Date();
 
@@ -50,6 +53,19 @@ export const TimelineView: React.FC = () => {
   };
 
   const getTodayPosition = () => getCurrentDatePosition(today, timelineStart, timelineEnd);
+
+  const handleViewLevelChange = (level: ViewLevel) => {
+    setViewLevel(level);
+    if (level === 'feature') {
+      const allEpicsExpanded: {[key: string]: boolean} = {};
+      data?.valueStreams.forEach(vs => {
+        vs.epics.forEach(epic => {
+          allEpicsExpanded[epic.id] = true;
+        });
+      });
+      setExpandedEpics(allEpicsExpanded);
+    }
+  };
 
   if (loading) {
     return (
@@ -116,6 +132,74 @@ export const TimelineView: React.FC = () => {
         onNextQuarter={handleNextQuarter}
         onToday={handleToday}
       />
+
+      <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Eye className="w-4 h-4 text-gray-600" />
+          <span className="text-sm font-medium text-gray-700">View:</span>
+          
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => handleViewLevelChange('epic')}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all
+                ${viewLevel === 'epic' 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }
+              `}
+              title="Show Epic Level"
+            >
+              <span>Epic</span>
+            </button>
+            
+            <button
+              onClick={() => handleViewLevelChange('feature')}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all
+                ${viewLevel === 'feature' 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }
+              `}
+              title="Show Feature Level"
+            >
+              <span>Feature</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="hidden md:flex items-center gap-4 text-sm text-gray-600">
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium">{data.valueStreams.length}</span>
+            <span>Value Streams</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium">
+              {data.valueStreams.reduce((sum, vs) => sum + vs.epics.length, 0)}
+            </span>
+            <span>Epics</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium">
+              {data.valueStreams.reduce((sum, vs) => 
+                sum + vs.epics.reduce((eSum, e) => eSum + (e.featureCount || e.features.length), 0), 0
+              )}
+            </span>
+            <span>Features</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium">
+              {data.valueStreams.reduce((sum, vs) => 
+                sum + vs.epics.reduce((eSum, e) => 
+                  eSum + e.features.reduce((fSum, f) => fSum + (f.userStoryCount || 0), 0), 0
+                ), 0
+              )}
+            </span>
+            <span>User Stories</span>
+          </div>
+        </div>
+      </div>
 
       <div className="flex-1 overflow-auto relative" ref={timelineRef}>
         <div 

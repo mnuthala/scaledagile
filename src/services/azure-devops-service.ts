@@ -1,11 +1,182 @@
-// Complete updated azure-devops-service.ts with User Story counts
+// azure-devops-service.ts - With completion tracking
 
-// At the top of the file, add:
 export type { Epic, Feature, ValueStream } from '../types/timeline.types';
 
 import * as SDK from 'azure-devops-extension-sdk';
 import { WorkItemTrackingRestClient, TreeStructureGroup } from 'azure-devops-extension-api/WorkItemTracking';
 import { getClient } from 'azure-devops-extension-api';
+
+type WorkItemType = 'Epic' | 'Feature';
+type ChildWorkItemType = 'Feature' | 'User Story';
+
+interface ChildWorkItemCounts {
+  total: number;
+  completed: number;
+  childIds: number[];
+}
+
+/**
+ * Fetch child work items with completion status using a SINGLE query
+ * @param workItemId - ID of the parent work item (Epic or Feature)
+ * @param workItemType - Type of the parent work item ('Epic' or 'Feature')
+ * @param orgUrl - Organization URL
+ * @param project - Project name
+ * @param headers - Auth headers
+ * @returns Object with total, completed counts and child IDs
+ */
+async function fetchChildWorkItemsWithCompletion(
+  workItemId: number,
+  workItemType: WorkItemType,
+  orgUrl: string,
+  project: string,
+  headers: any
+): Promise<ChildWorkItemCounts> {
+  
+  // Determine child work item type
+  const childType: ChildWorkItemType = workItemType === 'Epic' ? 'Feature' : 'User Story';
+  
+  // Completed states vary by work item type
+  const completedStates = childType === 'Feature' 
+    ? ['Done', 'Closed'] 
+    : ['Done', 'Closed', 'Resolved'];
+  
+  console.log(`      --- Fetching ${childType}s for ${workItemType} ${workItemId} with completion status ---`);
+  
+  // SINGLE QUERY: Get all child work items WITH their states
+  const query = {
+    query: `SELECT [System.Id], [System.State]
+            FROM WorkItemLinks
+            WHERE [Source].[System.Id] = ${workItemId}
+            AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
+            AND [Target].[System.WorkItemType] = '${childType}'
+            AND [Target].[System.TeamProject] = '${project}'
+            MODE (MustContain)`
+  };
+  
+  const wiqlUrl = `${orgUrl}/${project}/_apis/wit/wiql?api-version=7.0`;
+  
+  try {
+    const response = await fetch(wiqlUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(query)
+    });
+    
+    const result = await response.json();
+    const relations = result.workItemRelations || [];
+    
+    // Extract child IDs and states from the single query result
+    const children: Array<{ id: number; state: string }> = [];
+    
+    for (const rel of relations) {
+      // Skip the source work item (the parent)
+      if (rel.target && rel.target.id !== workItemId) {
+        children.push({
+          id: rel.target.id,
+          state: rel.attributes?.['System.State'] || 'Unknown'
+        });
+      }
+    }
+    
+    if (children.length === 0) {
+      console.log(`      No ${childType}s found`);
+      return { total: 0, completed: 0, childIds: [] };
+    }
+    
+    // Count completed items based on state
+    const completedCount = children.filter(child => 
+      completedStates.includes(child.state)
+    ).length;
+    
+    const childIds = children.map(c => c.id);
+    
+    console.log(`      ${childType}s: ${completedCount} completed out of ${children.length} total`);
+    console.log(`      States: ${children.map(c => `${c.id}:${c.state}`).join(', ')}`);
+    
+    return {
+      total: children.length,
+      completed: completedCount,
+      childIds: childIds
+    };
+    
+  } catch (error) {
+    console.error(`      Error fetching ${childType}s with completion:`, error);
+    return { total: 0, completed: 0, childIds: [] };
+  }
+}
+
+/**
+ * SDK version - Fetch child work items with completion status using a SINGLE query
+ */
+async function fetchChildWorkItemsWithCompletionSDK(
+  workItemId: number,
+  workItemType: WorkItemType,
+  client: WorkItemTrackingRestClient,
+  projectId: string,
+  projectName: string
+): Promise<ChildWorkItemCounts> {
+  
+  const childType: ChildWorkItemType = workItemType === 'Epic' ? 'Feature' : 'User Story';
+  
+  const completedStates = childType === 'Feature' 
+    ? ['Done', 'Closed'] 
+    : ['Done', 'Closed', 'Resolved'];
+  
+  console.log(`      --- Fetching ${childType}s for ${workItemType} ${workItemId} with completion status (SDK) ---`);
+  
+  try {
+    // SINGLE QUERY: Get all child work items WITH their states
+    const query = {
+      query: `SELECT [System.Id], [System.State]
+              FROM WorkItemLinks
+              WHERE [Source].[System.Id] = ${workItemId}
+              AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
+              AND [Target].[System.WorkItemType] = '${childType}'
+              AND [Target].[System.TeamProject] = '${projectName}'
+              MODE (MustContain)`
+    };
+    
+    const result = await client.queryByWiql(query, projectId);
+    const relations = result.workItemRelations || [];
+    
+    // Extract child IDs and states from the single query result
+    const children: Array<{ id: number; state: string }> = [];
+    
+    for (const rel of relations) {
+      if (rel.target && rel.target.id !== workItemId) {
+        children.push({
+          id: rel.target.id!,
+          state: (rel as any).attributes?.['System.State'] || 'Unknown'
+        });
+      }
+    }
+    
+    if (children.length === 0) {
+      console.log(`      No ${childType}s found`);
+      return { total: 0, completed: 0, childIds: [] };
+    }
+    
+    // Count completed items based on state
+    const completedCount = children.filter(child => 
+      completedStates.includes(child.state)
+    ).length;
+    
+    const childIds = children.map(c => c.id);
+    
+    console.log(`      ${childType}s: ${completedCount} completed out of ${children.length} total`);
+    console.log(`      States: ${children.map(c => `${c.id}:${c.state}`).join(', ')}`);
+    
+    return {
+      total: children.length,
+      completed: completedCount,
+      childIds: childIds
+    };
+    
+  } catch (error) {
+    console.error(`      Error fetching ${childType}s with completion:`, error);
+    return { total: 0, completed: 0, childIds: [] };
+  }
+}
 
 // Helper function to recursively extract iterations from classification nodes
 function extractIterationsFromNode(node: any, projectName: string, parentPath: string = ''): Map<string, { startDate: string; finishDate: string }> {
@@ -13,7 +184,6 @@ function extractIterationsFromNode(node: any, projectName: string, parentPath: s
   
   if (!node) return iterationMap;
   
-  // Build the full path
   let currentPath: string;
   if (!parentPath) {
     currentPath = node.name;
@@ -21,12 +191,7 @@ function extractIterationsFromNode(node: any, projectName: string, parentPath: s
     currentPath = `${parentPath}\\${node.name}`;
   }
   
-  // If this node has attributes (dates), add it to the map
   if (node.attributes && node.attributes.startDate && node.attributes.finishDate) {
-    console.log(`    Found iteration: ${currentPath}`);
-    console.log(`      Start: ${node.attributes.startDate}`);
-    console.log(`      End: ${node.attributes.finishDate}`);
-    
     iterationMap.set(currentPath, {
       startDate: node.attributes.startDate,
       finishDate: node.attributes.finishDate
@@ -46,7 +211,6 @@ function extractIterationsFromNode(node: any, projectName: string, parentPath: s
     });
   }
   
-  // Recursively process child nodes
   if (node.children && Array.isArray(node.children)) {
     for (const child of node.children) {
       const childIterations = extractIterationsFromNode(child, projectName, currentPath);
@@ -59,7 +223,6 @@ function extractIterationsFromNode(node: any, projectName: string, parentPath: s
   return iterationMap;
 }
 
-// Helper function to normalize iteration path
 function normalizeIterationPath(iterationPath: string, projectName: string): string[] {
   const variations: string[] = [];
   variations.push(iterationPath);
@@ -75,7 +238,6 @@ function normalizeIterationPath(iterationPath: string, projectName: string): str
   return variations;
 }
 
-// Helper function to find iteration dates with multiple path variations
 function findIterationDates(
   iterationPath: string, 
   projectName: string, 
@@ -87,7 +249,6 @@ function findIterationDates(
   for (const variation of variations) {
     const dates = iterationMap.get(variation);
     if (dates) {
-      console.log(`    Matched iteration path '${iterationPath}' as '${variation}'`);
       return dates;
     }
   }
@@ -107,10 +268,7 @@ export async function fetchWorkItemsLocal(
   };
 
   console.log('=== Starting Work Items Fetch ===');
-  console.log(`Organization URL: ${orgUrl}`);
-  console.log(`Project: ${project}`);
 
-  // Query for Epics with their Features - PROJECT SCOPED
   const wiqlUrl = `${orgUrl}/${project}/_apis/wit/wiql?api-version=7.0`;
   const wiqlQuery = {
     query: `SELECT [System.Id]
@@ -121,13 +279,8 @@ export async function fetchWorkItemsLocal(
             AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
             AND [Target].[System.WorkItemType] = 'Feature'
             AND [Target].[System.TeamProject] = '${project}'
-            MODE (MustContain)
-            ORDER BY [System.AreaPath]`
+            MODE (MustContain)`
   };
-
-  console.log('\n--- Query 1: Fetch Epics with Features (Project Scoped) ---');
-  console.log('URL:', wiqlUrl);
-  console.log('WIQL Query:', wiqlQuery.query);
 
   const queryResponse = await fetch(wiqlUrl, {
     method: 'POST',
@@ -137,14 +290,11 @@ export async function fetchWorkItemsLocal(
 
   const queryResult = await queryResponse.json();
   const epicRelations = queryResult.workItemRelations || [];
-  console.log(`Found ${epicRelations.length} epic-feature relationships in project '${project}'`);
   
   if (epicRelations.length === 0) {
-    console.log('No epics with features found, returning empty array');
     return [];
   }
 
-  // Extract unique Epic IDs from the relations
   const epicIdsSet = new Set<number>();
   const epicFeatureMap = new Map<number, number[]>();
   
@@ -157,7 +307,6 @@ export async function fetchWorkItemsLocal(
         epicFeatureMap.set(epicId, []);
       }
       
-      // Add feature ID if it's a target
       if (rel.target && rel.target.id !== epicId) {
         epicFeatureMap.get(epicId)!.push(rel.target.id);
       }
@@ -165,185 +314,91 @@ export async function fetchWorkItemsLocal(
   }
   
   const workItemIds = Array.from(epicIdsSet);
-  console.log(`Unique Epic IDs: ${workItemIds.length}`);
-  console.log('Epic IDs:', workItemIds);
   
-  // Log feature counts per epic
-  console.log('\nFeature counts per Epic:');
-  epicFeatureMap.forEach((featureIds, epicId) => {
-    console.log(`  Epic ${epicId}: ${featureIds.length} features`);
-  });
-  
-  if (workItemIds.length === 0) {
-    console.log('No epic IDs found, returning empty array');
-    return [];
-  }
-  
-  // Get Epic details
   const epicsUrl = `${orgUrl}/${project}/_apis/wit/workitems?ids=${workItemIds.join(',')}&fields=System.Id,System.Title,System.IterationPath,System.AreaPath,System.TeamProject&api-version=7.0`;
-  console.log('\n--- Query 2: Get Epic Details (Project Scoped) ---');
-  
   const epicsResponse = await fetch(epicsUrl, { headers });
   const epicsData = await epicsResponse.json();
   
   const projectEpics = epicsData.value.filter((wi: any) => wi.fields['System.TeamProject'] === project);
-  console.log(`Retrieved ${epicsData.value?.length || 0} epics, ${projectEpics.length} belong to project '${project}'`);
 
-  // Fetch iterations from project classification nodes
   const classificationNodesUrl = `${orgUrl}/${project}/_apis/wit/classificationnodes/iterations?$depth=10&api-version=7.0`;
-  console.log('\n--- Query 3: Fetch Project Iteration Configuration ---');
-  
   const classificationResponse = await fetch(classificationNodesUrl, { headers });
   const classificationData = await classificationResponse.json();
   
   const iterationMap = extractIterationsFromNode(classificationData, project);
-  console.log(`\nTotal iterations found in project configuration: ${iterationMap.size}`);
 
-  const valueStreamMap = new Map<string, Epic[]>();
-  let skippedEpics = 0;
-  let processedEpics = 0;
+  const valueStreamMap = new Map<string, any[]>();
 
-  console.log('\n=== Processing Epics (Project Scoped) ===');
-  
   for (const wi of projectEpics) {
-    const teamProject = wi.fields['System.TeamProject'];
-    const areaPath = wi.fields['System.AreaPath'];
     const iterationPath = wi.fields['System.IterationPath'];
+    const areaPath = wi.fields['System.AreaPath'];
     
-    console.log(`\nEpic ${wi.id}: ${wi.fields['System.Title']}`);
-    console.log(`  Team Project: ${teamProject}`);
-    console.log(`  Area Path: ${areaPath}`);
-    console.log(`  Iteration Path: ${iterationPath}`);
-    
-    if (teamProject !== project) {
-      console.log(`  ❌ SKIPPED: Belongs to different project`);
-      skippedEpics++;
-      continue;
-    }
-    
-    if (!iterationPath) {
-      console.log(`  ❌ SKIPPED: No iteration path`);
-      skippedEpics++;
-      continue;
-    }
+    if (!iterationPath) continue;
     
     const iterationDates = findIterationDates(iterationPath, project, iterationMap);
+    if (!iterationDates) continue;
     
-    if (!iterationDates) {
-      console.log(`  ❌ SKIPPED: Iteration not found in project configuration`);
-      skippedEpics++;
-      continue;
-    }
+    // Fetch Epic's child Features with completion status
+    const epicCompletion = await fetchChildWorkItemsWithCompletion(
+      wi.id,
+      'Epic',
+      orgUrl,
+      project,
+      headers
+    );
     
-    console.log(`  ✅ Valid iteration: ${iterationDates.startDate} to ${iterationDates.finishDate}`);
-    processedEpics++;
-    
-    const epic: Epic = {
+    const epic: any = {
       id: wi.id.toString(),
       title: wi.fields['System.Title'],
       iterationStart: iterationDates.startDate,
       iterationEnd: iterationDates.finishDate,
       features: [],
-      featureCount: epicFeatureMap.get(wi.id)?.length || 0
+      featureCount: epicCompletion.total,
+      completedFeatureCount: epicCompletion.completed
     };
 
-    console.log(`  Feature count (from initial query): ${epic.featureCount}`);
-
-    // Get the feature IDs for this epic from our map
-    const featureIds = epicFeatureMap.get(wi.id) || [];
+    const featureIds = epicCompletion.childIds;
     
     if (featureIds.length > 0) {
-      console.log(`  Feature IDs:`, featureIds);
-      
       const featuresUrl = `${orgUrl}/${project}/_apis/wit/workitems?ids=${featureIds.join(',')}&fields=System.Id,System.Title,System.IterationPath,System.TeamProject&api-version=7.0`;
-        const featuresResponse = await fetch(featuresUrl, { headers });
-        const featuresData = await featuresResponse.json();
+      const featuresResponse = await fetch(featuresUrl, { headers });
+      const featuresData = await featuresResponse.json();
+      
+      const projectFeatures = featuresData.value.filter((f: any) => f.fields['System.TeamProject'] === project);
+
+      for (const f of projectFeatures) {
+        const featureIterationPath = f.fields['System.IterationPath'];
         
-        const projectFeatures = featuresData.value.filter((f: any) => f.fields['System.TeamProject'] === project);
-        console.log(`  Retrieved ${featuresData.value?.length || 0} features, ${projectFeatures.length} belong to project`);
-
-        for (const f of projectFeatures) {
-          const featureProject = f.fields['System.TeamProject'];
-          const featureIterationPath = f.fields['System.IterationPath'];
-          
-          console.log(`    Feature ${f.id}: ${f.fields['System.Title']}`);
-          console.log(`      Team Project: ${featureProject}`);
-          console.log(`      Iteration Path: ${featureIterationPath}`);
-          
-          if (featureProject !== project) {
-            console.log(`      ❌ SKIPPED: Different project`);
-            continue;
-          }
-          
-          if (!featureIterationPath) {
-            console.log(`      ❌ SKIPPED: No iteration path`);
-            continue;
-          }
-          
-          const featureIterationDates = findIterationDates(featureIterationPath, project, iterationMap);
-          
-          if (!featureIterationDates) {
-            console.log(`      ❌ SKIPPED: Iteration not found`);
-            continue;
-          }
-          
-          console.log(`      ✅ Valid iteration: ${featureIterationDates.startDate} to ${featureIterationDates.finishDate}`);
-          
-          // Query for User Stories count under this Feature
-          const userStoryWiqlUrl = `${orgUrl}/${project}/_apis/wit/wiql?api-version=7.0`;
-          const userStoryQuery = {
-            query: `SELECT [System.Id] 
-                    FROM WorkItemLinks 
-                    WHERE [Source].[System.Id] = ${f.id}
-                    AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
-                    AND [Target].[System.WorkItemType] = 'User Story'
-                    AND [Target].[System.TeamProject] = '${project}'
-                    MODE (MustContain)`
-          };
-
-          console.log(`      --- Query: Fetch User Stories for Feature ${f.id} ---`);
-          
-          const userStoryQueryResponse = await fetch(userStoryWiqlUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(userStoryQuery)
-          });
-
-          const userStoryResult = await userStoryQueryResponse.json();
-          const userStoryRelations = userStoryResult.workItemRelations || [];
-          
-          // Filter out the source Feature itself and count targets
-          const userStoryCount = userStoryRelations
-            .filter((rel: any) => rel.target && rel.target.id !== f.id)
-            .length;
-          
-          console.log(`      User Stories count: ${userStoryCount}`);
-          
-          epic.features.push({
-            id: f.id.toString(),
-            title: f.fields['System.Title'],
-            iterationStart: featureIterationDates.startDate,
-            iterationEnd: featureIterationDates.finishDate,
-            userStoryCount: userStoryCount
-          });
-        }
+        if (!featureIterationPath) continue;
+        
+        const featureIterationDates = findIterationDates(featureIterationPath, project, iterationMap);
+        if (!featureIterationDates) continue;
+        
+        // Fetch Feature's child User Stories with completion status
+        const featureCompletion = await fetchChildWorkItemsWithCompletion(
+          f.id,
+          'Feature',
+          orgUrl,
+          project,
+          headers
+        );
+        
+        epic.features.push({
+          id: f.id.toString(),
+          title: f.fields['System.Title'],
+          iterationStart: featureIterationDates.startDate,
+          iterationEnd: featureIterationDates.finishDate,
+          userStoryCount: featureCompletion.total,
+          completedUserStoryCount: featureCompletion.completed
+        });
       }
-    } else {
-      console.log(`  No features found for this epic`);
     }
-
-    console.log(`  Total features added: ${epic.features.length}`);
 
     if (!valueStreamMap.has(areaPath)) {
       valueStreamMap.set(areaPath, []);
     }
     valueStreamMap.get(areaPath)!.push(epic);
   }
-
-  console.log('\n=== Summary ===');
-  console.log(`Total epics processed: ${processedEpics}`);
-  console.log(`Total epics skipped: ${skippedEpics}`);
-  console.log(`Value streams found: ${valueStreamMap.size}`);
 
   const result = Array.from(valueStreamMap.entries())
     .filter(([_, epics]) => epics.length > 0)
@@ -353,55 +408,32 @@ export async function fetchWorkItemsLocal(
       epics
     }));
 
-  console.log(`\nReturning ${result.length} value streams`);
-  console.log('=== End Work Items Fetch ===\n');
-
   return result;
 }
 
 export async function fetchWorkItemsFromQuery(queryGuid: string): Promise<ValueStream[]> {
-  console.log('=== Starting Work Items Fetch (Query GUID) ===');
-  console.log(`Query GUID: ${queryGuid}`);
-  
   const client = getClient(WorkItemTrackingRestClient);
   const projectService = await SDK.getService('ms.vss-tfs-web.tfs-page-data-service');
   const projectData = await (projectService as any).getPageData();
   const projectId = projectData.project.id;
   const projectName = projectData.project.name;
 
-  console.log(`Project ID: ${projectId}`);
-  console.log(`Project Name: ${projectName}`);
-
-  console.log('\n--- Query: Execute saved query ---');
   const queryResult = await client.queryById(queryGuid, projectId);
-  console.log(`Query returned ${queryResult.workItems?.length || 0} work items`);
   
   if (!queryResult.workItems || queryResult.workItems.length === 0) {
-    console.log('No work items found, returning empty array');
     return [];
   }
 
   const workItemIds = queryResult.workItems.map(wi => wi.id!);
-  console.log('Work Item IDs:', workItemIds);
-
-  console.log('\n--- Query: Get work item details ---');
   const workItems = await client.getWorkItems(
     workItemIds,
     projectId,
     ['System.Id', 'System.Title', 'System.IterationPath', 'System.AreaPath', 'System.WorkItemType', 'System.TeamProject']
   );
-  console.log(`Retrieved ${workItems.length} work items`);
 
   const projectWorkItems = workItems.filter(wi => wi.fields['System.TeamProject'] === projectName);
-  console.log(`${projectWorkItems.length} work items belong to project`);
-
   const epics = projectWorkItems.filter(wi => wi.fields['System.WorkItemType'] === 'Epic');
   const features = projectWorkItems.filter(wi => wi.fields['System.WorkItemType'] === 'Feature');
-  
-  console.log(`Epics: ${epics.length}, Features: ${features.length}`);
-
-  // Fetch iterations
-  console.log('\n--- Query: Fetch Project Iteration Configuration ---');
   
   const iterationMap = new Map<string, { startDate: string; finishDate: string }>();
   
@@ -417,146 +449,72 @@ export async function fetchWorkItemsFromQuery(queryGuid: string): Promise<ValueS
     extractedIterations.forEach((value, key) => {
       iterationMap.set(key, value);
     });
-    
-    console.log(`Total iterations found: ${iterationMap.size}`);
   } catch (error) {
     console.error('Error fetching classification nodes:', error);
   }
   
-  const valueStreamMap = new Map<string, Epic[]>();
-  let skippedEpics = 0;
-  let processedEpics = 0;
-
-  console.log('\n=== Processing Epics ===');
+  const valueStreamMap = new Map<string, any[]>();
 
   for (const epicWi of epics) {
-    const teamProject = epicWi.fields['System.TeamProject'];
-    const areaPath = epicWi.fields['System.AreaPath'];
     const iterationPath = epicWi.fields['System.IterationPath'];
+    const areaPath = epicWi.fields['System.AreaPath'];
     
-    console.log(`\nEpic ${epicWi.id}: ${epicWi.fields['System.Title']}`);
-    console.log(`  Iteration Path: ${iterationPath}`);
-    
-    if (teamProject !== projectName) {
-      console.log(`  ❌ SKIPPED: Different project`);
-      skippedEpics++;
-      continue;
-    }
-    
-    if (!iterationPath) {
-      console.log(`  ❌ SKIPPED: No iteration path`);
-      skippedEpics++;
-      continue;
-    }
+    if (!iterationPath) continue;
     
     const iterationData = findIterationDates(iterationPath, projectName, iterationMap);
+    if (!iterationData) continue;
     
-    if (!iterationData) {
-      console.log(`  ❌ SKIPPED: Iteration not found`);
-      skippedEpics++;
-      continue;
-    }
+    // Fetch Epic's child Features with completion status using SDK
+    const epicCompletion = await fetchChildWorkItemsWithCompletionSDK(
+      epicWi.id!,
+      'Epic',
+      client,
+      projectId,
+      projectName
+    );
     
-    console.log(`  ✅ Valid iteration`);
-    processedEpics++;
-    
-    // Get child feature IDs from relations
-    const epicRelations = epicWi.relations || [];
-    const childFeatureIds = epicRelations
-      .filter(rel => rel.rel === 'System.LinkTypes.Hierarchy-Forward')
-      .map(rel => parseInt(rel.url.split('/').pop()!));
-
-    console.log(`  Child feature IDs: ${childFeatureIds.length > 0 ? childFeatureIds : 'none'}`);
-    
-    const epic: Epic = {
+    const epic: any = {
       id: epicWi.id!.toString(),
       title: epicWi.fields['System.Title'],
       iterationStart: iterationData.startDate,
       iterationEnd: iterationData.finishDate,
       features: [],
-      featureCount: childFeatureIds.length
+      featureCount: epicCompletion.total,
+      completedFeatureCount: epicCompletion.completed
     };
 
-    console.log(`  Feature count: ${epic.featureCount}`);
-
-    for (const f of features.filter(feat => childFeatureIds.includes(feat.id!))) {
-      const featureProject = f.fields['System.TeamProject'];
+    for (const f of features.filter(feat => epicCompletion.childIds.includes(feat.id!))) {
       const featureIterationPath = f.fields['System.IterationPath'];
       
-      console.log(`    Feature ${f.id}: ${f.fields['System.Title']}`);
-      
-      if (featureProject !== projectName) {
-        console.log(`      ❌ SKIPPED: Different project`);
-        continue;
-      }
-      
-      if (!featureIterationPath) {
-        console.log(`      ❌ SKIPPED: No iteration path`);
-        continue;
-      }
+      if (!featureIterationPath) continue;
       
       const featureIterationData = findIterationDates(featureIterationPath, projectName, iterationMap);
+      if (!featureIterationData) continue;
       
-      if (!featureIterationData) {
-        console.log(`      ❌ SKIPPED: Iteration not found`);
-        continue;
-      }
+      // Fetch Feature's child User Stories with completion status using SDK
+      const featureCompletion = await fetchChildWorkItemsWithCompletionSDK(
+        f.id!,
+        'Feature',
+        client,
+        projectId,
+        projectName
+      );
       
-      console.log(`      ✅ Valid iteration`);
-      
-      // Query for User Stories count using SDK
-      try {
-        const userStoryQuery = {
-          query: `SELECT [System.Id] 
-                  FROM WorkItemLinks 
-                  WHERE [Source].[System.Id] = ${f.id}
-                  AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
-                  AND [Target].[System.WorkItemType] = 'User Story'
-                  AND [Target].[System.TeamProject] = '${projectName}'
-                  MODE (MustContain)`
-        };
-        
-        const userStoryResult = await client.queryByWiql(userStoryQuery, projectId);
-        const userStoryRelations = userStoryResult.workItemRelations || [];
-        
-        // Count actual user stories (exclude source)
-        const userStoryCount = userStoryRelations
-          .filter(rel => rel.target && rel.target.id !== f.id)
-          .length;
-        
-        console.log(`      User Stories count: ${userStoryCount}`);
-        
-        epic.features.push({
-          id: f.id!.toString(),
-          title: f.fields['System.Title'],
-          iterationStart: featureIterationData.startDate,
-          iterationEnd: featureIterationData.finishDate,
-          userStoryCount: userStoryCount
-        });
-      } catch (error) {
-        console.error(`      Error fetching user stories: ${error}`);
-        // Add feature without user story count
-        epic.features.push({
-          id: f.id!.toString(),
-          title: f.fields['System.Title'],
-          iterationStart: featureIterationData.startDate,
-          iterationEnd: featureIterationData.finishDate,
-          userStoryCount: 0
-        });
-      }
+      epic.features.push({
+        id: f.id!.toString(),
+        title: f.fields['System.Title'],
+        iterationStart: featureIterationData.startDate,
+        iterationEnd: featureIterationData.finishDate,
+        userStoryCount: featureCompletion.total,
+        completedUserStoryCount: featureCompletion.completed
+      });
     }
-
-    console.log(`  Total features added: ${epic.features.length}`);
 
     if (!valueStreamMap.has(areaPath)) {
       valueStreamMap.set(areaPath, []);
     }
     valueStreamMap.get(areaPath)!.push(epic);
   }
-
-  console.log('\n=== Summary ===');
-  console.log(`Total epics processed: ${processedEpics}`);
-  console.log(`Total epics skipped: ${skippedEpics}`);
 
   const result = Array.from(valueStreamMap.entries())
     .filter(([_, epics]) => epics.length > 0)
@@ -565,9 +523,6 @@ export async function fetchWorkItemsFromQuery(queryGuid: string): Promise<ValueS
       name: name.split('\\').pop() || name,
       epics
     }));
-
-  console.log(`\nReturning ${result.length} value streams`);
-  console.log('=== End Work Items Fetch ===\n');
 
   return result;
 }

@@ -18,7 +18,7 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
 }) => {
   if (barStyle.display === 'none') return null;
 
-  const progressPercentage = (progress.completed / progress.total) * 100;
+  const progressPercentage = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
 
   return (
     <div
