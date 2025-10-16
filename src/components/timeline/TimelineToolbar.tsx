@@ -53,6 +53,7 @@ export const TimelineToolbar: React.FC<TimelineToolbarProps> = ({
           <button
             onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
             className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md transition-colors"
+            title={`Current view: ${getViewLevelDisplay()}`}
           >
             <Eye className="w-4 h-4 text-gray-600" />
             <span className="text-sm font-medium text-gray-700">View:</span>
@@ -78,6 +79,7 @@ export const TimelineToolbar: React.FC<TimelineToolbarProps> = ({
                     }
                     first:rounded-t-lg
                   `}
+                  title="Show Epics as root items (collapsed)"
                 >
                   <div className="font-medium">Epics</div>
                   <div className="text-xs text-gray-500">Start from Epics (collapsed)</div>
@@ -91,6 +93,7 @@ export const TimelineToolbar: React.FC<TimelineToolbarProps> = ({
                       : 'text-gray-700 hover:bg-gray-50'
                     }
                   `}
+                  title="Show Features as root items (collapsed)"
                 >
                   <div className="font-medium">Features</div>
                   <div className="text-xs text-gray-500">Start from Features (root level)</div>
@@ -105,6 +108,7 @@ export const TimelineToolbar: React.FC<TimelineToolbarProps> = ({
                     }
                     last:rounded-b-lg
                   `}
+                  title="Show all levels expanded (Epics → Features → Stories)"
                 >
                   <div className="font-medium">Stories</div>
                   <div className="text-xs text-gray-500">Show all levels expanded</div>
@@ -117,7 +121,7 @@ export const TimelineToolbar: React.FC<TimelineToolbarProps> = ({
         <button
           onClick={onOpenSettings}
           className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md transition-colors"
-          title="Settings"
+          title="Open settings to configure timeline display options"
         >
           <Settings className="w-4 h-4 text-gray-600" />
           <span className="text-sm font-medium text-gray-700">Settings</span>
