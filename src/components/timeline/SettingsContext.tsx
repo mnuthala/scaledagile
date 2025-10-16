@@ -7,6 +7,7 @@ export interface BorderColors {
   task: string;
   bug: string;
   issue: string;
+  milestone: string;
 }
 
 export interface Settings {
@@ -28,6 +29,7 @@ const defaultBorderColors: BorderColors = {
   task: 'border-gray-500',
   bug: 'border-red-500',
   issue: 'border-orange-500',
+  milestone: 'border-purple-500',
 };
 
 const defaultSettings: Settings = {

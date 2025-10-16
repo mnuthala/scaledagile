@@ -66,6 +66,25 @@ const DEFAULT_CONFIGS: Record<WorkItemType, Partial<WorkItemCardConfig>> = {
   },
 };
 
+// Helper function to extract background color from Tailwind class
+const getBackgroundStyle = (tailwindClass: string): string => {
+  const colorMap: { [key: string]: string } = {
+    'bg-blue-500': '#3b82f6',
+    'bg-green-500': '#22c55e',
+    'bg-yellow-500': '#eab308',
+    'bg-red-500': '#ef4444',
+    'bg-orange-500': '#f97316',
+    'bg-purple-500': '#a855f7',
+    'bg-pink-500': '#ec4899',
+    'bg-indigo-500': '#6366f1',
+    'bg-teal-500': '#14b8a6',
+    'bg-cyan-500': '#06b6d4',
+    'bg-gray-500': '#6b7280',
+    'bg-slate-500': '#64748b',
+  };
+  return colorMap[tailwindClass] || '#22c55e';
+};
+
 // Helper to get work item type icon
 const getWorkItemIcon = (workItemType: string) => {
   const type = workItemType?.toLowerCase() || '';
@@ -79,6 +98,9 @@ const getWorkItemIcon = (workItemType: string) => {
   if (type.includes('bug')) {
     return <AlertCircle className="w-4 h-4" />;
   }
+  if (type.includes('milestone')) {
+    return <span className="w-4 h-4 flex items-center justify-center text-sm">🏁</span>;
+  }
   
   return null;
 };
@@ -89,7 +111,8 @@ const shouldShowIconBadge = (workItemType: string) => {
   return type.includes('story') || 
          type.includes('backlog item') || 
          type.includes('task') || 
-         type.includes('bug');
+         type.includes('bug') ||
+         type.includes('milestone');
 };
 
 export const WorkItemCard: React.FC<WorkItemCardProps> = ({
@@ -264,8 +287,11 @@ export const WorkItemCard: React.FC<WorkItemCardProps> = ({
                 <div className="flex items-center gap-2">
                   <div className="flex-1 bg-gray-200 rounded-full h-2">
                     <div
-                      className={`${finalConfig.progressBarColor} h-2 rounded-full transition-all`}
-                      style={{ width: `${progressPercentage}%` }}
+                      className="h-2 rounded-full transition-all"
+                      style={{ 
+                        width: `${progressPercentage}%`,
+                        backgroundColor: getBackgroundStyle(finalConfig.progressBarColor)
+                      }}
                     ></div>
                   </div>
                   <span className="text-xs text-gray-600 whitespace-nowrap">
@@ -327,33 +353,35 @@ export const WorkItemCard: React.FC<WorkItemCardProps> = ({
           {/* For stories, tasks, bugs: Show chevron (if has children) and icon */}
           {showIconBadge ? (
             <>
-              <div className="flex items-center gap-2">
-                {/* Chevron if has children */}
-                {onToggle && (
-                  <div className="flex-shrink-0">
-                    {isExpanded ? (
-                      <ChevronDown className="w-4 h-4 text-gray-600" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-gray-600" />
-                    )}
-                  </div>
-                )}
-                
-                {/* Icon badge */}
-                <a
-                  href={getWorkItemUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={handleLinkClick}
-                  className="text-gray-600 hover:text-blue-600 transition-colors"
-                  title={`Open ${metadata.workItemType} ${id}`}
-                >
-                  {getWorkItemIcon(metadata.workItemType || '')}
-                </a>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  {/* Chevron if has children */}
+                  {onToggle && (
+                    <div className="flex-shrink-0">
+                      {isExpanded ? (
+                        <ChevronDown className="w-4 h-4 text-gray-600" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-600" />
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Icon badge */}
+                  <a
+                    href={getWorkItemUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={handleLinkClick}
+                    className="text-gray-600 hover:text-blue-600 transition-colors"
+                    title={`Open ${metadata.workItemType} ${id}`}
+                  >
+                    {getWorkItemIcon(metadata.workItemType || '')}
+                  </a>
+                </div>
                 
                 {/* Blocked descendant indicator for small cards */}
                 {hasBlockedDescendant && !blocked && (
-                  <XCircle className="w-4 h-4 text-red-500 ml-auto" title="Has blocked child" />
+                  <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" title="Has blocked child" />
                 )}
               </div>
             </>
@@ -393,7 +421,7 @@ export const WorkItemCard: React.FC<WorkItemCardProps> = ({
 
               {/* Metadata section (state) */}
               {metadata.state && (
-                <div className={`mb-1 ${config.type === 'feature' ? 'mt-3' : ''}`}>
+                <div className={`mb-1 ${config.type === 'feature' ? 'mt-1' : ''}`}>
                   <span className="text-xs text-gray-500 italic">{metadata.state}</span>
                 </div>
               )}
@@ -414,8 +442,11 @@ export const WorkItemCard: React.FC<WorkItemCardProps> = ({
                   {progress.total > 0 && (
                     <div className="w-full bg-gray-200 rounded-full h-1.5">
                       <div
-                        className={`${finalConfig.progressBarColor} h-1.5 rounded-full transition-all`}
-                        style={{ width: `${progressPercentage}%` }}
+                        className="h-1.5 rounded-full transition-all"
+                        style={{ 
+                          width: `${progressPercentage}%`,
+                          backgroundColor: getBackgroundStyle(finalConfig.progressBarColor)
+                        }}
                       ></div>
                     </div>
                   )}

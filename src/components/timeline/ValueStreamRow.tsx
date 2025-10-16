@@ -3,10 +3,37 @@ import { TimelineMonth } from '../../types/timeline.types';
 import { GenericWorkItem, ValueStreamData } from '../../utils/dataAdapter';
 import { WorkItemCard } from './WorkItemCard';
 import { TodayIndicator } from './TodayIndicator';
+import { MilestoneIndicator } from './MilestoneIndicator';
 import { calculateBarStyle } from '../../utils/timelineCalculations';
 import { isItemVisible as checkItemVisible } from '../../utils/dateHelpers';
 import { CARD_HEIGHTS, COLORS } from '../../utils/constants';
 import { useSettings } from './SettingsContext';
+import { useMilestones } from './MilestoneContext';
+
+// --- Helper function to extract milestone name from tags ---
+function extractMilestoneName(tags?: string[] | string): string | null {
+  if (!tags) return null;
+  
+  const tagsArray = Array.isArray(tags) ? tags : tags.split(';');
+
+  console.log(`Extracting milestone from tags: ${tagsArray.length}`);
+  console.log(`Tags is it Array: ${Array.isArray(tags)}`);
+  
+  for (const tag of tagsArray) {
+    const tagLower = tag.toLowerCase().trim();
+    console.log(`Checking tag for milestone: ${tagLower}`);
+    
+    // Check for 'Milestone:' or '#Milestone:' prefix (case insensitive)
+    if (tagLower.startsWith('milestone:')) {
+      return tag.substring(10).trim(); // Remove 'milestone:' prefix
+    }
+    if (tagLower.startsWith('#milestone:')) {
+      return tag.substring(11).trim(); // Remove '#milestone:' prefix
+    }
+  }
+  
+  return null;
+}
 
 // --- Helper function to pluralize work item types ---
 function pluralize(type: string): string {
@@ -128,6 +155,7 @@ function getWorkItemTypeKey(workItemType: string): string {
   if (lowerType === 'task') return 'task';
   if (lowerType === 'bug') return 'bug';
   if (lowerType === 'issue') return 'issue';
+  if (lowerType === 'milestone') return 'milestone';
   
   return 'task'; // default
 }
@@ -141,12 +169,14 @@ function getWorkItemConfigWithSettings(
   
   // Get border color from settings
   const borderColor = borderColors[typeKey] || 'border-gray-500';
+  // Progress bar color is always green
+  const progressBarColor = 'bg-green-500';
 
   const WORK_ITEM_TYPE_MAP: { [key: string]: Partial<WorkItemConfig> } = {
     'epic': { 
       type: 'epic', 
       borderColor, 
-      progressBarColor: 'bg-green-500', 
+      progressBarColor, 
       height: 100,
       spacing: 110,
       showChevron: true, 
@@ -155,19 +185,20 @@ function getWorkItemConfigWithSettings(
     'feature': { 
       type: 'feature', 
       borderColor, 
-      progressBarColor: 'bg-green-500', 
+      progressBarColor, 
       height: 80,
       spacing: 90,
       showChevron: true, 
       showProgress: true 
     },
-    'user story': { type: 'story', borderColor, progressBarColor: 'bg-green-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
-    'story': { type: 'story', borderColor, progressBarColor: 'bg-green-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
-    'product backlog item': { type: 'story', borderColor, progressBarColor: 'bg-green-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
-    'backlog item': { type: 'story', borderColor, progressBarColor: 'bg-green-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
-    'task': { type: 'task', borderColor, progressBarColor: 'bg-green-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
-    'bug': { type: 'task', borderColor, progressBarColor: 'bg-green-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
-    'issue': { type: 'task', borderColor, progressBarColor: 'bg-green-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
+    'user story': { type: 'story', borderColor, progressBarColor, height: 50, spacing: 60, showChevron: true, showProgress: true },
+    'story': { type: 'story', borderColor, progressBarColor, height: 50, spacing: 60, showChevron: true, showProgress: true },
+    'product backlog item': { type: 'story', borderColor, progressBarColor, height: 50, spacing: 60, showChevron: true, showProgress: true },
+    'backlog item': { type: 'story', borderColor, progressBarColor, height: 50, spacing: 60, showChevron: true, showProgress: true },
+    'task': { type: 'task', borderColor, progressBarColor, height: 35, spacing: 45, showChevron: false, showProgress: false },
+    'bug': { type: 'task', borderColor, progressBarColor, height: 35, spacing: 45, showChevron: false, showProgress: false },
+    'issue': { type: 'task', borderColor, progressBarColor, height: 35, spacing: 45, showChevron: false, showProgress: false },
+    'milestone': { type: 'task', borderColor, progressBarColor, height: 35, spacing: 45, showChevron: false, showProgress: false },
   };
   
   const config = WORK_ITEM_TYPE_MAP[workItemType];
@@ -176,7 +207,7 @@ function getWorkItemConfigWithSettings(
     return {
       type: config.type || 'task',
       borderColor: config.borderColor || 'border-gray-500',
-      progressBarColor: config.progressBarColor || 'bg-green-500',
+      progressBarColor: config.progressBarColor || progressBarColor,
       height: config.height || 40,
       spacing: config.spacing || 50,
       showChevron: config.showChevron ?? false,
@@ -189,7 +220,7 @@ function getWorkItemConfigWithSettings(
     return {
       type: 'epic',
       borderColor: borderColors.epic || 'border-blue-500',
-      progressBarColor: 'bg-green-500',
+      progressBarColor,
       height: 100,
       spacing: 110,
       showChevron: true,
@@ -201,7 +232,7 @@ function getWorkItemConfigWithSettings(
   return {
     type: 'task',
     borderColor: borderColors.task || 'border-gray-500',
-    progressBarColor: 'bg-green-500',
+    progressBarColor,
     height: 40,
     spacing: 50,
     showChevron: false,
@@ -257,6 +288,7 @@ interface RenderWorkItemsProps {
   onToggleItem: (itemId: string) => void;
   isItemVisible: (start: string, end: string) => boolean;
   borderColors: any;
+  milestones: any[];
 }
 
 const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
@@ -268,6 +300,7 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
   onToggleItem,
   isItemVisible,
   borderColors,
+  milestones,
 }) => {
   let currentOffset = yOffset;
 
@@ -284,6 +317,12 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
         const itemYOffset = currentOffset;
         const hasChildren = workItem.children && workItem.children.length > 0;
         const hasBlockedChild = hasBlockedDescendant(workItem);
+        
+        // Extract milestone name from tags
+        const milestoneName = extractMilestoneName(workItem.tags);
+        const associatedMilestone = milestoneName 
+          ? milestones.find(m => m.name.toLowerCase() === milestoneName.toLowerCase().trim())
+          : null;
         
         // Update offset for next item
         currentOffset += config.spacing;
@@ -317,6 +356,22 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
               }}
             />
 
+            {/* Render milestone indicator if associated milestone exists */ console.log(`associatedMilestone : ${associatedMilestone}`)}
+            {associatedMilestone && (
+              <div 
+                className="absolute left-0 right-0 pointer-events-none z-40"
+                style={{ top: `${itemYOffset}px`, height: `${config.height}px` }}
+              >
+                <MilestoneIndicator
+                  date={associatedMilestone.date}
+                  timelineStart={timelineStart}
+                  timelineEnd={timelineEnd}
+                  milestoneName={associatedMilestone.name}
+                  color={associatedMilestone.color}
+                />
+              </div>
+            )}
+
             {expandedItems[workItem.id] && hasChildren && (
               <RenderWorkItems
                 workItems={workItem.children!}
@@ -327,6 +382,7 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
                 onToggleItem={onToggleItem}
                 isItemVisible={isItemVisible}
                 borderColors={borderColors}
+                milestones={milestones}
               />
             )}
           </div>
@@ -363,10 +419,16 @@ export const ValueStreamRow: React.FC<ValueStreamRowProps> = ({
   getCurrentDatePosition,
 }) => {
   const { settings } = useSettings();
+  const { milestones } = useMilestones();
   const isItemVisible = (start: string, end: string) => 
     checkItemVisible(start, end, timelineStart, timelineEnd);
 
-  const rowHeight = calculateTotalHeight(valueStream.workItems, expandedItems, isItemVisible, settings.borderColors);
+  const rowHeight = calculateTotalHeight(
+    valueStream.workItems, 
+    expandedItems, 
+    isItemVisible, 
+    settings.borderColors
+  );
 
   return (
     <div 
@@ -403,6 +465,7 @@ export const ValueStreamRow: React.FC<ValueStreamRowProps> = ({
           onToggleItem={onToggleItem}
           isItemVisible={isItemVisible}
           borderColors={settings.borderColors}
+          milestones={milestones}
         />
       </div>
     </div>

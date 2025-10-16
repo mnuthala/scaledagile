@@ -2,13 +2,16 @@ import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import { TimelineView } from '@components/timeline/TimelineView';
 import { SettingsProvider } from '@components/timeline/SettingsContext';
+import { MilestoneProvider } from './components/timeline/MilestoneContext';
 
 const isAzureDevOpsContext = typeof window !== 'undefined' && (window as any).SDK;
 
 const App = () => (
-  <SettingsProvider>
-    <TimelineView />
-  </SettingsProvider>
+  <MilestoneProvider>
+    <SettingsProvider>
+      <TimelineView />
+    </SettingsProvider>
+  </MilestoneProvider>
 );
 
 if (isAzureDevOpsContext) {

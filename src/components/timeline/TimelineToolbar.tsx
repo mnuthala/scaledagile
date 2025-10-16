@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, Settings } from 'lucide-react';
+import { Eye, Settings, Calendar } from 'lucide-react';
 
 // ViewLevel now controls BOTH the root type AND the expand/collapse behavior
 export type ViewLevel = 'epic' | 'feature' | 'story';
@@ -13,6 +13,7 @@ interface TimelineToolbarProps {
   featuresCount?: number;
   userStoriesCount?: number;
   onOpenSettings: () => void;
+  onOpenMilestones: () => void;
 }
 
 export const TimelineToolbar: React.FC<TimelineToolbarProps> = ({
@@ -24,6 +25,7 @@ export const TimelineToolbar: React.FC<TimelineToolbarProps> = ({
   featuresCount,
   userStoriesCount,
   onOpenSettings,
+  onOpenMilestones,
 }) => {
   const [isViewMenuOpen, setIsViewMenuOpen] = React.useState(false);
 
@@ -118,6 +120,17 @@ export const TimelineToolbar: React.FC<TimelineToolbarProps> = ({
           )}
         </div>
 
+        {/* Milestones Button */}
+        <button
+          onClick={onOpenMilestones}
+          className="flex items-center gap-2 px-3 py-1.5 hover:bg-purple-50 rounded-md transition-colors border border-purple-200"
+          title="Manage milestones"
+        >
+          <Calendar className="w-4 h-4 text-purple-600" />
+          <span className="text-sm font-medium text-purple-700">Milestones</span>
+        </button>
+
+        {/* Settings Button */}
         <button
           onClick={onOpenSettings}
           className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md transition-colors"

@@ -4,6 +4,7 @@ import { TimelineHeader } from './TimelineHeader';
 import { TimelineGrid } from './TimelineGrid';
 import { TimelineToolbar, ViewLevel } from './TimelineToolbar';
 import { SettingsModal } from './SettingsModal';
+import { MilestoneModal } from './MilestoneModal';
 import { ValueStreamRow } from './ValueStreamRow';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ErrorMessage } from '../common/ErrorMessage';
@@ -32,6 +33,7 @@ export const TimelineView: React.FC = () => {
   const [quarterOffset, setQuarterOffset] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(ZOOM.DEFAULT);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMilestonesOpen, setIsMilestonesOpen] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const today = new Date();
 
@@ -112,6 +114,14 @@ export const TimelineView: React.FC = () => {
     setIsSettingsOpen(false);
   };
 
+  const handleOpenMilestones = () => {
+    setIsMilestonesOpen(true);
+  };
+
+  const handleCloseMilestones = () => {
+    setIsMilestonesOpen(false);
+  };
+
   // Calculate counts for different work item types
   const calculateCounts = () => {
     let epicsCount = 0;
@@ -166,9 +176,11 @@ export const TimelineView: React.FC = () => {
           featuresCount={0}
           userStoriesCount={0}
           onOpenSettings={handleOpenSettings}
+          onOpenMilestones={handleOpenMilestones}
         />
         <LoadingSpinner />
         <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
+        <MilestoneModal isOpen={isMilestonesOpen} onClose={handleCloseMilestones} />
       </div>
     );
   }
@@ -193,9 +205,11 @@ export const TimelineView: React.FC = () => {
           featuresCount={0}
           userStoriesCount={0}
           onOpenSettings={handleOpenSettings}
+          onOpenMilestones={handleOpenMilestones}
         />
         <ErrorMessage message={error} />
         <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
+        <MilestoneModal isOpen={isMilestonesOpen} onClose={handleCloseMilestones} />
       </div>
     );
   }
@@ -222,6 +236,7 @@ export const TimelineView: React.FC = () => {
           featuresCount={0}
           userStoriesCount={0}
           onOpenSettings={handleOpenSettings}
+          onOpenMilestones={handleOpenMilestones}
         />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-gray-600">
@@ -233,6 +248,7 @@ export const TimelineView: React.FC = () => {
           </div>
         </div>
         <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
+        <MilestoneModal isOpen={isMilestonesOpen} onClose={handleCloseMilestones} />
       </div>
     );
   }
@@ -257,9 +273,11 @@ export const TimelineView: React.FC = () => {
         featuresCount={featuresCount}
         userStoriesCount={storiesCount}
         onOpenSettings={handleOpenSettings}
+        onOpenMilestones={handleOpenMilestones}
       />
 
       <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
+      <MilestoneModal isOpen={isMilestonesOpen} onClose={handleCloseMilestones} />
 
       <div className="flex-1 overflow-auto relative" ref={timelineRef}>
         <div 
