@@ -232,6 +232,7 @@ function buildWorkItemTreeQuery(
            [System.WorkItemType],
            [System.IterationPath],
            [System.AreaPath],
+           [System.Tags],
            [System.TeamProject]
     FROM WorkItemLinks
     WHERE [Source].[System.TeamProject] = '${project}'
@@ -282,6 +283,7 @@ interface WorkItemNode {
   workItemType: WorkItemType;
   iterationPath: string;
   areaPath: string;
+  tags?: string[];
   children: WorkItemNode[];
   childIds: number[];
 }
@@ -305,6 +307,7 @@ function buildTreeFromLinks(
       workItemType: wi.fields['System.WorkItemType'],
       iterationPath: wi.fields['System.IterationPath'],
       areaPath: wi.fields['System.AreaPath'],
+      tags: wi.fields['System.Tags'],
       children: [],
       childIds: []
     });
@@ -436,6 +439,7 @@ function convertNodeToWorkItem(
     title: node.title,
     state: node.state,
     workItemType: node.workItemType,
+    tags: node.tags,
     iterationStart: iterationDates.startDate,
     iterationEnd: iterationDates.finishDate,
     children: []
@@ -615,7 +619,7 @@ export async function fetchWorkItemsLocal(
   console.log(`Fetching details for ${ids.length} work items`);
 
   // Step 3: Fetch all work item details in bulk
-  const workItemsUrl = `${orgUrl}/${project}/_apis/wit/workitems?ids=${ids.join(',')}&fields=System.Id,System.Title,System.IterationPath,System.AreaPath,System.State,System.WorkItemType,System.TeamProject&api-version=7.0`;
+  const workItemsUrl = `${orgUrl}/${project}/_apis/wit/workitems?ids=${ids.join(',')}&fields=System.Id,System.Title,System.IterationPath,System.AreaPath,System.Tags,System.State,System.WorkItemType,System.TeamProject&api-version=7.0`;
   const workItemsResponse = await fetch(workItemsUrl, { headers });
   const workItemsData = await workItemsResponse.json();
   

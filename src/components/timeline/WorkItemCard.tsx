@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronRight, ExternalLink, FileText, CheckSquare, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, FileText, CheckSquare, AlertCircle, XCircle } from 'lucide-react';
 import { UserStoryProgress } from '../../types/timeline.types';
 import { useSettings } from './SettingsContext';
 
@@ -27,7 +27,9 @@ interface WorkItemCardProps {
   isExpanded?: boolean;
   onToggle?: () => void;
   onClick?: () => void;
+  hasBlockedDescendant?: boolean;
   metadata?: {
+    tags?: string[] | string;
     childWorkItemType?: string;
     [key: string]: any;
   };
@@ -102,6 +104,7 @@ export const WorkItemCard: React.FC<WorkItemCardProps> = ({
   isExpanded = false,
   onToggle,
   onClick,
+  hasBlockedDescendant = false,
   metadata = {},
 }) => {
   const { settings } = useSettings();
@@ -200,7 +203,6 @@ export const WorkItemCard: React.FC<WorkItemCardProps> = ({
         : String(metadata.tags).toLowerCase();
       
       if (tagsStr.includes('blocked') || tagsStr.includes('#blocked')) {
-        console.log('Item is blocked due to tags:', tagsStr);
         return true;
       }
     }
@@ -284,8 +286,10 @@ export const WorkItemCard: React.FC<WorkItemCardProps> = ({
         
         <div className="border-t border-gray-200 pt-2">
           <p className="text-xs text-gray-500 italic">Click title or icon to open in new window</p>
-          {blocked && (
-            <p className="text-xs text-red-600 font-semibold mt-1">⚠️ BLOCKED</p>
+          {(blocked || hasBlockedDescendant) && (
+            <p className="text-xs text-red-600 font-semibold mt-1">
+              ⚠️ {blocked ? 'BLOCKED' : 'HAS BLOCKED CHILD'}
+            </p>
           )}
         </div>
       </div>
@@ -346,6 +350,11 @@ export const WorkItemCard: React.FC<WorkItemCardProps> = ({
                 >
                   {getWorkItemIcon(metadata.workItemType || '')}
                 </a>
+                
+                {/* Blocked descendant indicator for small cards */}
+                {hasBlockedDescendant && !blocked && (
+                  <XCircle className="w-4 h-4 text-red-500 ml-auto" title="Has blocked child" />
+                )}
               </div>
             </>
           ) : (
@@ -363,17 +372,22 @@ export const WorkItemCard: React.FC<WorkItemCardProps> = ({
                   </div>
                 )}
                 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 flex items-start gap-2">
                   <a
                     href={getWorkItemUrl()}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={handleLinkClick}
-                    className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline line-clamp-2 leading-tight flex items-start gap-1 group"
+                    className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline line-clamp-2 leading-tight flex items-start gap-1 group flex-1"
                   >
                     <span className="flex-1">{title}</span>
                     <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5" />
                   </a>
+                  
+                  {/* Blocked descendant indicator for Epic/Feature */}
+                  {hasBlockedDescendant && !blocked && (
+                    <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" title="Has blocked child" />
+                  )}
                 </div>
               </div>
 

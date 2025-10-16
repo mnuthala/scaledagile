@@ -40,6 +40,42 @@ function isCompletedState(state: any, stateCategory?: any): boolean {
   return COMPLETED_STATE_NAMES.has(s);
 }
 
+// --- Helper function to check if item is blocked ---
+function isItemBlocked(workItem: GenericWorkItem): boolean {
+  // Check state
+  if (workItem.state?.toLowerCase() === 'blocked') {
+    return true;
+  }
+  
+  // Check tags
+  if (workItem.tags) {
+    const tagsStr = Array.isArray(workItem.tags) 
+      ? workItem.tags.join(',').toLowerCase()
+      : String(workItem.tags).toLowerCase();
+    
+    if (tagsStr.includes('blocked') || tagsStr.includes('#blocked')) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// --- Helper function to check if item or any descendant is blocked ---
+function hasBlockedDescendant(workItem: GenericWorkItem): boolean {
+  // Check if this item itself is blocked
+  if (isItemBlocked(workItem)) {
+    return true;
+  }
+  
+  // Recursively check children
+  if (workItem.children && workItem.children.length > 0) {
+    return workItem.children.some(child => hasBlockedDescendant(child));
+  }
+  
+  return false;
+}
+
 function calculateProgress(workItem: GenericWorkItem): { total: number; completed: number } {
   // Use pre-calculated counts if available (more efficient and accurate)
   if (workItem.workItemType === 'Epic') {
@@ -232,6 +268,7 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
         const progress = calculateProgress(workItem);
         const itemYOffset = currentOffset;
         const hasChildren = workItem.children && workItem.children.length > 0;
+        const hasBlockedChild = hasBlockedDescendant(workItem);
         
         // Update offset for next item
         currentOffset += config.spacing;
@@ -256,10 +293,12 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
               isExpanded={expandedItems[workItem.id]}
               onToggle={hasChildren ? () => onToggleItem(workItem.id) : undefined}
               config={config}
+              hasBlockedDescendant={hasBlockedChild}
               metadata={{
                 state: workItem.state,
                 workItemType: workItem.workItemType,
                 childCount: workItem.children?.length || 0,
+                tags: workItem.tags,
               }}
             />
 
@@ -280,6 +319,8 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
     </>
   );
 };
+
+export { ValueStreamRow };
 
 // --- Main ValueStreamRow Component ---
 interface ValueStreamRowProps {

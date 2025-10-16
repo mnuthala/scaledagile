@@ -12,7 +12,7 @@ export interface GenericWorkItem {
   iterationPath?: string;
   assignedTo?: string;
   children?: GenericWorkItem[];
-  
+  tags?: string[] | string;
   // Backwards compatibility properties
   featureCount?: number;
   completedFeatureCount?: number;
@@ -83,6 +83,7 @@ function transformEpicToWorkItem(epic: any): GenericWorkItem {
     iterationEnd: epic.iterationEnd,
     iterationPath: epic.iterationPath,
     assignedTo: epic.assignedTo,
+    tags: epic.tags,
     children: [],
     featureCount: epic.featureCount,
     completedFeatureCount: epic.completedFeatureCount
@@ -110,6 +111,7 @@ function transformFeatureToWorkItem(feature: any): GenericWorkItem {
     iterationEnd: feature.iterationEnd,
     iterationPath: feature.iterationPath,
     assignedTo: feature.assignedTo,
+    tags: feature.tags,
     children: [],
     userStoryCount: feature.userStoryCount,
     completedUserStoryCount: feature.completedUserStoryCount
@@ -137,6 +139,7 @@ function transformUserStoryToWorkItem(story: any): GenericWorkItem {
     iterationEnd: story.iterationEnd,
     iterationPath: story.iterationPath,
     assignedTo: story.assignedTo,
+    tags: story.tags,
     children: []
   };
 }
