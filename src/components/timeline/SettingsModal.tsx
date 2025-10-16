@@ -1,258 +1,199 @@
-import React, { useState, useEffect } from 'react';
-import { X, Settings } from 'lucide-react';
-import { useSettings } from '@components/timeline/SettingsContext';
+import React, { useState } from 'react';
+import { X } from 'lucide-react';
+import { useSettings, BorderColors } from './SettingsContext';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+// Available Tailwind colors
+const AVAILABLE_COLORS = [
+  { name: 'Blue', value: 'border-blue-500', bg: 'bg-blue-500' },
+  { name: 'Green', value: 'border-green-500', bg: 'bg-green-500' },
+  { name: 'Yellow', value: 'border-yellow-500', bg: 'bg-yellow-500' },
+  { name: 'Red', value: 'border-red-500', bg: 'bg-red-500' },
+  { name: 'Orange', value: 'border-orange-500', bg: 'bg-orange-500' },
+  { name: 'Purple', value: 'border-purple-500', bg: 'bg-purple-500' },
+  { name: 'Pink', value: 'border-pink-500', bg: 'bg-pink-500' },
+  { name: 'Indigo', value: 'border-indigo-500', bg: 'bg-indigo-500' },
+  { name: 'Teal', value: 'border-teal-500', bg: 'bg-teal-500' },
+  { name: 'Cyan', value: 'border-cyan-500', bg: 'bg-cyan-500' },
+  { name: 'Gray', value: 'border-gray-500', bg: 'bg-gray-500' },
+  { name: 'Slate', value: 'border-slate-500', bg: 'bg-slate-500' },
+];
+
+interface ColorPickerProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}
+
+const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange }) => {
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-700">{label}</label>
+      <div className="grid grid-cols-6 gap-2">
+        {AVAILABLE_COLORS.map((color) => (
+          <button
+            key={color.value}
+            onClick={() => onChange(color.value)}
+            className={`
+              w-10 h-10 rounded-lg ${color.bg} 
+              border-2 transition-all
+              ${value === color.value ? 'border-gray-900 ring-2 ring-gray-900 ring-offset-2' : 'border-gray-300 hover:border-gray-400'}
+            `}
+            title={color.name}
+            type="button"
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const { settings, updateSettings, resetSettings } = useSettings();
   const [localSettings, setLocalSettings] = useState(settings);
 
-  // Sync local settings with context when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      console.log('Modal opened, syncing settings:', settings);
-      setLocalSettings(settings);
-    }
-  }, [isOpen, settings]);
+  React.useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings, isOpen]);
+
+  if (!isOpen) return null;
 
   const handleSave = () => {
-    console.log('Save button clicked, saving settings:', localSettings);
     updateSettings(localSettings);
     onClose();
   };
 
-  const handleCancel = () => {
-    console.log('Cancel button clicked');
-    setLocalSettings(settings); // Reset to saved settings
-    onClose();
-  };
-
   const handleReset = () => {
-    if (window.confirm('Are you sure you want to reset all settings to defaults?')) {
-      console.log('Reset confirmed');
+    if (confirm('Are you sure you want to reset all settings to defaults?')) {
       resetSettings();
       onClose();
     }
   };
 
-  if (!isOpen) return null;
+  const updateBorderColor = (type: keyof BorderColors, color: string) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      borderColors: {
+        ...prev.borderColors,
+        [type]: color,
+      },
+    }));
+  };
 
   return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
-        onClick={handleCancel}
-      />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-2xl font-semibold text-gray-900">Settings</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
 
-      {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div 
-          className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200">
-            <div className="flex items-center gap-2">
-              <Settings className="w-5 h-5 text-gray-600" />
-              <h2 className="text-xl font-semibold text-gray-800">Settings</h2>
-            </div>
-            <button
-              onClick={handleCancel}
-              className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-              title="Close"
-            >
-              <X className="w-5 h-5 text-gray-600" />
-            </button>
-          </div>
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Display Options */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Display Options</h3>
+            <div className="space-y-3">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.showProgressBars}
+                  onChange={(e) => setLocalSettings({ ...localSettings, showProgressBars: e.target.checked })}
+                  className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Show Progress Bars</span>
+              </label>
 
-          {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-            <div className="space-y-6">
-              {/* Display Settings Section */}
-              <section>
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Display Settings</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Show Progress Bars</label>
-                      <p className="text-xs text-gray-500">Display completion progress on cards</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      className="w-4 h-4" 
-                      checked={localSettings.showProgressBars}
-                      onChange={(e) => setLocalSettings({...localSettings, showProgressBars: e.target.checked})}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Show Today Indicator</label>
-                      <p className="text-xs text-gray-500">Display vertical line for current date</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      className="w-4 h-4" 
-                      checked={localSettings.showTodayIndicator}
-                      onChange={(e) => setLocalSettings({...localSettings, showTodayIndicator: e.target.checked})}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Compact View</label>
-                      <p className="text-xs text-gray-500">Reduce spacing between items</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      className="w-4 h-4" 
-                      checked={localSettings.compactView}
-                      onChange={(e) => setLocalSettings({...localSettings, compactView: e.target.checked})}
-                    />
-                  </div>
-                </div>
-              </section>
-
-              {/* Timeline Settings Section */}
-              <section className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Timeline Settings</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-2">
-                      Default View Range
-                    </label>
-                    <select 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                      value={localSettings.defaultViewRange}
-                      onChange={(e) => setLocalSettings({...localSettings, defaultViewRange: Number(e.target.value)})}
-                    >
-                      <option value="1">1 Quarter</option>
-                      <option value="2">2 Quarters</option>
-                      <option value="3">3 Quarters</option>
-                      <option value="4">4 Quarters (Year)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-2">
-                      Start Week On
-                    </label>
-                    <select 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                      value={localSettings.startWeekOn}
-                      onChange={(e) => setLocalSettings({...localSettings, startWeekOn: e.target.value as 'sunday' | 'monday'})}
-                    >
-                      <option value="sunday">Sunday</option>
-                      <option value="monday">Monday</option>
-                    </select>
-                  </div>
-                </div>
-              </section>
-
-              {/* Data Settings Section */}
-              <section className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Data Settings</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Auto-refresh Data</label>
-                      <p className="text-xs text-gray-500">Automatically update timeline data</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      className="w-4 h-4" 
-                      checked={localSettings.autoRefreshData}
-                      onChange={(e) => setLocalSettings({...localSettings, autoRefreshData: e.target.checked})}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-2">
-                      Refresh Interval
-                    </label>
-                    <select 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                      value={localSettings.refreshInterval}
-                      onChange={(e) => setLocalSettings({...localSettings, refreshInterval: Number(e.target.value)})}
-                      disabled={!localSettings.autoRefreshData}
-                    >
-                      <option value="5">5 minutes</option>
-                      <option value="15">15 minutes</option>
-                      <option value="30">30 minutes</option>
-                      <option value="60">1 hour</option>
-                    </select>
-                  </div>
-                </div>
-              </section>
-
-              {/* Color Settings Section */}
-              <section className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Color Settings</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-gray-700">Epic Color</label>
-                    <input 
-                      type="color" 
-                      value={localSettings.epicColor}
-                      onChange={(e) => setLocalSettings({...localSettings, epicColor: e.target.value})}
-                      className="w-12 h-8 rounded cursor-pointer" 
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-gray-700">Feature Color</label>
-                    <input 
-                      type="color" 
-                      value={localSettings.featureColor}
-                      onChange={(e) => setLocalSettings({...localSettings, featureColor: e.target.value})}
-                      className="w-12 h-8 rounded cursor-pointer" 
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-gray-700">Today Indicator Color</label>
-                    <input 
-                      type="color" 
-                      value={localSettings.todayIndicatorColor}
-                      onChange={(e) => setLocalSettings({...localSettings, todayIndicatorColor: e.target.value})}
-                      className="w-12 h-8 rounded cursor-pointer" 
-                    />
-                  </div>
-                </div>
-              </section>
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localSettings.showTodayIndicator}
+                  onChange={(e) => setLocalSettings({ ...localSettings, showTodayIndicator: e.target.checked })}
+                  className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Show Today Indicator</span>
+              </label>
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between gap-2 p-4 border-t border-gray-200 bg-gray-50">
-            <button
-              onClick={handleReset}
-              className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-md transition-colors"
-            >
-              Reset to Defaults
-            </button>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleCancel}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-md transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-              >
-                Save Changes
-              </button>
+          {/* Border Colors */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Work Item Border Colors</h3>
+            <div className="space-y-4">
+              <ColorPicker
+                label="Epic Border Color"
+                value={localSettings.borderColors.epic}
+                onChange={(color) => updateBorderColor('epic', color)}
+              />
+              
+              <ColorPicker
+                label="Feature Border Color"
+                value={localSettings.borderColors.feature}
+                onChange={(color) => updateBorderColor('feature', color)}
+              />
+              
+              <ColorPicker
+                label="Story Border Color"
+                value={localSettings.borderColors.story}
+                onChange={(color) => updateBorderColor('story', color)}
+              />
+              
+              <ColorPicker
+                label="Task Border Color"
+                value={localSettings.borderColors.task}
+                onChange={(color) => updateBorderColor('task', color)}
+              />
+              
+              <ColorPicker
+                label="Bug Border Color"
+                value={localSettings.borderColors.bug}
+                onChange={(color) => updateBorderColor('bug', color)}
+              />
+              
+              <ColorPicker
+                label="Issue Border Color"
+                value={localSettings.borderColors.issue}
+                onChange={(color) => updateBorderColor('issue', color)}
+              />
             </div>
           </div>
         </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+          <button
+            onClick={handleReset}
+            className="px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            Reset to Defaults
+          </button>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
       </div>
-    </>
+    </div>
   );
 };

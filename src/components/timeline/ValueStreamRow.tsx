@@ -8,9 +8,6 @@ import { isItemVisible as checkItemVisible } from '../../utils/dateHelpers';
 import { CARD_HEIGHTS, COLORS } from '../../utils/constants';
 import { useSettings } from './SettingsContext';
 
-// --- Generic Work Item Types ---
-// Now imported from dataAdapter
-
 // --- Helper function to pluralize work item types ---
 function pluralize(type: string): string {
   if (!type) return 'items';
@@ -122,50 +119,64 @@ interface WorkItemConfig {
   showProgress: boolean;
 }
 
-const WORK_ITEM_TYPE_MAP: { [key: string]: Partial<WorkItemConfig> } = {
-  // Epic variants - Increased height to accommodate progress bar
-  'epic': { 
-    type: 'epic', 
-    borderColor: COLORS.EPIC_BORDER, 
-    progressBarColor: COLORS.EPIC_PROGRESS, 
-    height: 100,  // Increased from 80
-    spacing: 110, // Increased from 90
-    showChevron: true, 
-    showProgress: true 
-  },
+function getWorkItemTypeKey(workItemType: string): string {
+  const lowerType = workItemType.toLowerCase();
   
-  // Feature variants - Increased height to accommodate progress bar
-  'feature': { 
-    type: 'feature', 
-    borderColor: COLORS.FEATURE_BORDER, 
-    progressBarColor: COLORS.FEATURE_PROGRESS, 
-    height: 80,   // Increased from 60
-    spacing: 90,  // Increased from 70
-    showChevron: true, 
-    showProgress: true 
-  },
+  if (lowerType === 'epic') return 'epic';
+  if (lowerType === 'feature') return 'feature';
+  if (lowerType.includes('story') || lowerType.includes('backlog item')) return 'story';
+  if (lowerType === 'task') return 'task';
+  if (lowerType === 'bug') return 'bug';
+  if (lowerType === 'issue') return 'issue';
   
-  // Story variants
-  'user story': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
-  'story': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
-  'product backlog item': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
-  'backlog item': { type: 'story', borderColor: 'border-yellow-500', progressBarColor: 'bg-yellow-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
-  
-  // Task variants
-  'task': { type: 'task', borderColor: 'border-gray-500', progressBarColor: 'bg-gray-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
-  'bug': { type: 'task', borderColor: 'border-red-500', progressBarColor: 'bg-red-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
-  'issue': { type: 'task', borderColor: 'border-orange-500', progressBarColor: 'bg-orange-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
-};
+  return 'task'; // default
+}
 
-function getWorkItemConfig(workItem: GenericWorkItem): WorkItemConfig {
+function getWorkItemConfigWithSettings(
+  workItem: GenericWorkItem, 
+  borderColors: any
+): WorkItemConfig {
   const workItemType = (workItem.workItemType || '').toLowerCase();
+  const typeKey = getWorkItemTypeKey(workItem.workItemType || '');
+  
+  // Get border color from settings
+  const borderColor = borderColors[typeKey] || 'border-gray-500';
+
+  const WORK_ITEM_TYPE_MAP: { [key: string]: Partial<WorkItemConfig> } = {
+    'epic': { 
+      type: 'epic', 
+      borderColor, 
+      progressBarColor: 'bg-green-500', 
+      height: 100,
+      spacing: 110,
+      showChevron: true, 
+      showProgress: true 
+    },
+    'feature': { 
+      type: 'feature', 
+      borderColor, 
+      progressBarColor: 'bg-green-500', 
+      height: 80,
+      spacing: 90,
+      showChevron: true, 
+      showProgress: true 
+    },
+    'user story': { type: 'story', borderColor, progressBarColor: 'bg-green-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
+    'story': { type: 'story', borderColor, progressBarColor: 'bg-green-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
+    'product backlog item': { type: 'story', borderColor, progressBarColor: 'bg-green-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
+    'backlog item': { type: 'story', borderColor, progressBarColor: 'bg-green-500', height: 50, spacing: 60, showChevron: true, showProgress: true },
+    'task': { type: 'task', borderColor, progressBarColor: 'bg-green-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
+    'bug': { type: 'task', borderColor, progressBarColor: 'bg-green-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
+    'issue': { type: 'task', borderColor, progressBarColor: 'bg-green-500', height: 35, spacing: 45, showChevron: false, showProgress: false },
+  };
+  
   const config = WORK_ITEM_TYPE_MAP[workItemType];
   
   if (config) {
     return {
       type: config.type || 'task',
       borderColor: config.borderColor || 'border-gray-500',
-      progressBarColor: config.progressBarColor || 'bg-gray-500',
+      progressBarColor: config.progressBarColor || 'bg-green-500',
       height: config.height || 40,
       spacing: config.spacing || 50,
       showChevron: config.showChevron ?? false,
@@ -177,8 +188,8 @@ function getWorkItemConfig(workItem: GenericWorkItem): WorkItemConfig {
   if (workItem.children && workItem.children.length > 0) {
     return {
       type: 'epic',
-      borderColor: COLORS.EPIC_BORDER,
-      progressBarColor: COLORS.EPIC_PROGRESS,
+      borderColor: borderColors.epic || 'border-blue-500',
+      progressBarColor: 'bg-green-500',
       height: 100,
       spacing: 110,
       showChevron: true,
@@ -189,8 +200,8 @@ function getWorkItemConfig(workItem: GenericWorkItem): WorkItemConfig {
   // Default to task-like item
   return {
     type: 'task',
-    borderColor: 'border-gray-500',
-    progressBarColor: 'bg-gray-500',
+    borderColor: borderColors.task || 'border-gray-500',
+    progressBarColor: 'bg-green-500',
     height: 40,
     spacing: 50,
     showChevron: false,
@@ -202,15 +213,16 @@ function getWorkItemConfig(workItem: GenericWorkItem): WorkItemConfig {
 function calculateWorkItemHeight(
   workItem: GenericWorkItem,
   expandedItems: { [key: string]: boolean },
-  isItemVisible: (start: string, end: string) => boolean
+  isItemVisible: (start: string, end: string) => boolean,
+  borderColors: any
 ): number {
-  const config = getWorkItemConfig(workItem);
+  const config = getWorkItemConfigWithSettings(workItem, borderColors);
   let height = config.spacing;
 
   if (expandedItems[workItem.id] && workItem.children) {
     workItem.children.forEach(child => {
       if (isItemVisible(child.iterationStart, child.iterationEnd)) {
-        height += calculateWorkItemHeight(child, expandedItems, isItemVisible);
+        height += calculateWorkItemHeight(child, expandedItems, isItemVisible, borderColors);
       }
     });
   }
@@ -221,13 +233,14 @@ function calculateWorkItemHeight(
 function calculateTotalHeight(
   workItems: GenericWorkItem[],
   expandedItems: { [key: string]: boolean },
-  isItemVisible: (start: string, end: string) => boolean
+  isItemVisible: (start: string, end: string) => boolean,
+  borderColors: any
 ): number {
   let totalHeight = 16; // Base padding
   
   workItems.forEach(item => {
     if (isItemVisible(item.iterationStart, item.iterationEnd)) {
-      totalHeight += calculateWorkItemHeight(item, expandedItems, isItemVisible);
+      totalHeight += calculateWorkItemHeight(item, expandedItems, isItemVisible, borderColors);
     }
   });
 
@@ -243,6 +256,7 @@ interface RenderWorkItemsProps {
   expandedItems: { [key: string]: boolean };
   onToggleItem: (itemId: string) => void;
   isItemVisible: (start: string, end: string) => boolean;
+  borderColors: any;
 }
 
 const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
@@ -253,6 +267,7 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
   expandedItems,
   onToggleItem,
   isItemVisible,
+  borderColors,
 }) => {
   let currentOffset = yOffset;
 
@@ -263,7 +278,7 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
           return null;
         }
 
-        const config = getWorkItemConfig(workItem);
+        const config = getWorkItemConfigWithSettings(workItem, borderColors);
         const barStyle = calculateBarStyle(workItem.iterationStart, workItem.iterationEnd, timelineStart, timelineEnd);
         const progress = calculateProgress(workItem);
         const itemYOffset = currentOffset;
@@ -275,7 +290,7 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
         if (expandedItems[workItem.id] && hasChildren) {
           workItem.children!.forEach(child => {
             if (isItemVisible(child.iterationStart, child.iterationEnd)) {
-              currentOffset += calculateWorkItemHeight(child, expandedItems, isItemVisible);
+              currentOffset += calculateWorkItemHeight(child, expandedItems, isItemVisible, borderColors);
             }
           });
         }
@@ -311,6 +326,7 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
                 expandedItems={expandedItems}
                 onToggleItem={onToggleItem}
                 isItemVisible={isItemVisible}
+                borderColors={borderColors}
               />
             )}
           </div>
@@ -319,8 +335,6 @@ const RenderWorkItems: React.FC<RenderWorkItemsProps> = ({
     </>
   );
 };
-
-export { ValueStreamRow };
 
 // --- Main ValueStreamRow Component ---
 interface ValueStreamRowProps {
@@ -352,7 +366,7 @@ export const ValueStreamRow: React.FC<ValueStreamRowProps> = ({
   const isItemVisible = (start: string, end: string) => 
     checkItemVisible(start, end, timelineStart, timelineEnd);
 
-  const rowHeight = calculateTotalHeight(valueStream.workItems, expandedItems, isItemVisible);
+  const rowHeight = calculateTotalHeight(valueStream.workItems, expandedItems, isItemVisible, settings.borderColors);
 
   return (
     <div 
@@ -388,6 +402,7 @@ export const ValueStreamRow: React.FC<ValueStreamRowProps> = ({
           expandedItems={expandedItems}
           onToggleItem={onToggleItem}
           isItemVisible={isItemVisible}
+          borderColors={settings.borderColors}
         />
       </div>
     </div>

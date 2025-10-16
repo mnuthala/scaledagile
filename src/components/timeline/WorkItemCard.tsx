@@ -38,7 +38,7 @@ interface WorkItemCardProps {
 const DEFAULT_CONFIGS: Record<WorkItemType, Partial<WorkItemCardConfig>> = {
   epic: {
     borderColor: 'border-blue-500',
-    progressBarColor: 'bg-blue-500',
+    progressBarColor: 'bg-green-500',
     height: 100,
     showChevron: true,
     showProgress: true,
@@ -52,14 +52,14 @@ const DEFAULT_CONFIGS: Record<WorkItemType, Partial<WorkItemCardConfig>> = {
   },
   story: {
     borderColor: 'border-yellow-500',
-    progressBarColor: 'bg-yellow-500',
+    progressBarColor: 'bg-green-500',
     height: 50,
     showChevron: false,
     showProgress: false,
   },
   task: {
     borderColor: 'border-gray-500',
-    progressBarColor: 'bg-gray-500',
+    progressBarColor: 'bg-green-500',
     height: 35,
     showChevron: false,
     showProgress: false,
@@ -393,7 +393,7 @@ export const WorkItemCard: React.FC<WorkItemCardProps> = ({
 
               {/* Metadata section (state) */}
               {metadata.state && (
-                <div className="mb-1">
+                <div className={`mb-1 ${config.type === 'feature' ? 'mt-3' : ''}`}>
                   <span className="text-xs text-gray-500 italic">{metadata.state}</span>
                 </div>
               )}
